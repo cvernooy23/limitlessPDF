@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/* ---- limitlessPDF design tokens ---------------------------------------------- */
+@theme {
+  --color-glass-tint: rgba(255, 255, 255, 0.06);
+  --color-glass-stroke: rgba(255, 255, 255, 0.12);
+  --color-ink: #e9eaf0;
+  --color-ink-dim: #9aa0b4;
+  --color-accent: #6ea8ff;
+  --color-accent-2: #a78bfa;
+  --radius-glass: 16px;
+}
+
+/* ---- base --------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  /* Transparent so the native window vibrancy (Mica/Acrylic/macOS) shows
+     through. A soft gradient sits on top of the OS blur for depth. */
+  background: transparent;
+  color: var(--color-ink);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The PDF text layer must stay selectable so users can copy text, even though
+   the surrounding app chrome is not selectable. */
+.textLayer,
+.textLayer span,
+.textLayer br {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+#app {
+  /* Fallback ambient gradient for platforms without native blur (some Linux
+     compositors). On Windows/macOS the OS effect dominates. */
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(110, 168, 255, 0.16), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, rgba(167, 139, 250, 0.14), transparent 55%),
+    linear-gradient(160deg, rgba(20, 22, 32, 0.72), rgba(12, 13, 20, 0.82));
+}
+
+/* ---- reusable glass surface --------------------------------------------- */
+.glass {
+  background: var(--color-glass-tint);
+  border: 1px solid var(--color-glass-stroke);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.glass-hover {
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Specular sheen used on the main panels for the "shiny" look. */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 42%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 58%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.sheen:hover::before {
+  transform: translateX(120%);
+  transition: transform 900ms ease;
+}
+
+/* Find-in-document highlights, painted on pdf.js text-layer spans. */
+.textLayer .lp-hit {
+  background: rgba(255, 221, 87, 0.42);
+  border-radius: 2px;
+}
+.textLayer .lp-hit-active {
+  background: rgba(255, 145, 40, 0.78);
+  box-shadow: 0 0 0 1px rgba(255, 145, 40, 0.9);
+}
+
+/* Slim custom scrollbars to fit the aesthetic. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: padding-box;
+}

@@ -1,0 +1,4 @@
+# The platform PDFium library (pdfium.dll / libpdfium.dylib / libpdfium.so) is
+# placed here by `npm run get-pdfium` and bundled into release builds via the
+# `bundle.resources` glob in tauri.conf.json. This file keeps the folder (and
+# the glob) present even before the binary is downloaded.

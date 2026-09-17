@@ -1,0 +1,27 @@
+# Node
+node_modules/
+dist/
+.vite/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# PDFium binaries (downloaded per-platform, not committed)
+src-tauri/lib/
+**/pdfium.dll
+**/libpdfium.so
+**/libpdfium.dylib
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# Tool / cache artifacts
+.uv-cache/
+.uv-tools/
+.agents/
+*.pdf
