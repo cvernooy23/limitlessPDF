@@ -20,6 +20,7 @@
     onOpen?: () => void;
     onSearch?: () => void;
     onTool?: (mode: AnnoTool) => void;
+    onOcr?: () => void;
     activeTool?: AnnoTool;
     hasDoc?: boolean;
   } = $props();
@@ -38,6 +39,9 @@
     [
       { id: "text", label: "Text", icon: "M5 5h14M12 5v14M9 19h6", enabled: true, mode: "text" },
       { id: "edit", label: "Edit text", icon: "M5 16l9-9 3 3-9 9H5z", enabled: true, mode: "edittext" },
+    ],
+    [
+      { id: "ocr", label: "OCR", icon: "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6M9 12h4M9 15h5", enabled: true },
     ],
   ];
 
