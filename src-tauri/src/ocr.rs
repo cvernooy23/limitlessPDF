@@ -188,7 +188,7 @@ pub fn run_ocr(req: &OcrRequest) -> Result<Vec<OcrPageResult>, String> {
             continue;
         }
 
-        // 1. Render the page to a PNG via PDFium.
+        // 1. Render the page to an image via PDFium.
         let page = pdfium_doc
             .pages()
             .get(idx as u16)
@@ -210,13 +210,21 @@ pub fn run_ocr(req: &OcrRequest) -> Result<Vec<OcrPageResult>, String> {
             )
             .map_err(|e| format!("Render page {page_num}: {e:?}"))?;
 
-        let img_path = tmp_dir.join(format!("page_{page_num}.png"));
-        bitmap
-            .as_image()
-            .as_rgba8()
-            .ok_or_else(|| format!("Page {page_num}: could not convert to RGBA"))?
-            .save(&img_path)
-            .map_err(|e| format!("Save PNG page {page_num}: {e}"))?;
+        let img_path = tmp_dir.join(format!("page_{page_num}.ppm"));
+        {
+            use std::io::Write as _;
+            let rgba = bitmap.as_rgba_bytes();
+            let w = bitmap.width();
+            let h = bitmap.height();
+            let mut f = std::fs::File::create(&img_path)
+                .map_err(|e| format!("Create image page {page_num}: {e}"))?;
+            write!(f, "P6\n{w} {h}\n255\n")
+                .map_err(|e| format!("PPM header page {page_num}: {e}"))?;
+            // RGBA → RGB: drop the alpha byte from each pixel.
+            let rgb: Vec<u8> = rgba.chunks(4).flat_map(|px| &px[..3]).copied().collect();
+            f.write_all(&rgb)
+                .map_err(|e| format!("PPM data page {page_num}: {e}"))?;
+        }
 
         // 2. Run Tesseract to produce HOCR output.
         let hocr_base = tmp_dir.join(format!("page_{page_num}_hocr"));

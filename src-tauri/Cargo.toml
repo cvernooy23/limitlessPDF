@@ -33,11 +33,9 @@ getrandom = "0.4"
 # PDF engine. pdfium-render loads the PDFium dynamic library at runtime, so the
 # crate compiles even when the .dll/.dylib/.so isn't present yet — we surface a
 # friendly "not found" status instead of failing the build.
-pdfium-render = "0.8"
-
-# Required by the OCR pipeline to save PDFium page renders as PNG before
-# passing them to Tesseract.
-image = "0.25"
+# Default features include the `image` crate which we don't need — the OCR
+# pipeline writes PPM files directly from the raw pixel buffer.
+pdfium-render = { version = "0.8", default-features = false, features = ["pdfium_latest", "thread_safe"] }
 
 # Native window blur: Mica/Acrylic on Windows, vibrancy on macOS.
 [target."cfg(target_os = \"windows\")".dependencies]
