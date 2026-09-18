@@ -116,3 +116,52 @@ export async function savePdf(
     sourcePassword: sourcePassword ?? null,
   });
 }
+
+
+// ── OCR ───────────────────────────────────────────────────────────────────
+
+export interface OcrStatus {
+  available: boolean;
+  version: string | null;
+  languages: string[];
+  message: string;
+}
+
+export interface OcrPageResult {
+  page: number;
+  wordCount: number;
+  textPreview: string;
+}
+
+/** Check whether Tesseract is installed and which languages are available. */
+export async function checkOcrAvailable(): Promise<OcrStatus> {
+  return invoke<OcrStatus>("check_ocr_available");
+}
+
+/** Detect pages that are likely scanned images (little/no extractable text). */
+export async function detectScannedPages(
+  path: string,
+  sourcePassword?: string,
+): Promise<number[]> {
+  return invoke<number[]>("detect_scanned_pages", {
+    path,
+    sourcePassword: sourcePassword ?? null,
+  });
+}
+
+/** Run OCR on the given pages. The PDF is updated in-place with an invisible text layer. */
+export async function runOcr(
+  srcPath: string,
+  pages: number[],
+  language?: string,
+  dpi?: number,
+  sourcePassword?: string,
+): Promise<OcrPageResult[]> {
+  return invoke<OcrPageResult[]>("run_ocr", {
+    srcPath,
+    pages,
+    language: language ?? null,
+    dpi: dpi ?? null,
+    sourcePassword: sourcePassword ?? null,
+  });
+}

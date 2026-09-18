@@ -105,3 +105,42 @@ pub fn engine_status(app: tauri::AppHandle) -> engine::EngineStatus {
 
     engine::status_in(&dirs)
 }
+
+
+// ── OCR commands ──────────────────────────────────────────────────────────
+
+/// Check whether Tesseract is installed and what languages are available.
+#[tauri::command]
+pub fn check_ocr_available() -> crate::ocr::OcrStatus {
+    crate::ocr::check_available()
+}
+
+/// Detect which pages in a PDF are likely scanned images (very little
+/// extractable text). Returns a list of 1-based page numbers.
+#[tauri::command]
+pub fn detect_scanned_pages(
+    path: String,
+    source_password: Option<String>,
+) -> Result<Vec<u32>, String> {
+    crate::ocr::detect_scanned_pages(&path, source_password.as_deref())
+}
+
+/// Run the full OCR pipeline on the given pages: render via PDFium, run
+/// Tesseract, inject invisible text layer, and save the result in-place.
+#[tauri::command]
+pub fn run_ocr(
+    src_path: String,
+    pages: Vec<u32>,
+    language: Option<String>,
+    dpi: Option<u32>,
+    source_password: Option<String>,
+) -> Result<Vec<crate::ocr::OcrPageResult>, String> {
+    let req = crate::ocr::OcrRequest {
+        src_path,
+        pages,
+        language,
+        dpi,
+        source_password,
+    };
+    crate::ocr::run_ocr(&req)
+}
