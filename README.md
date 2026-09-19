@@ -1,5 +1,15 @@
 # limitlessPDF
 
+[![CI](https://github.com/cvernooy23/limitlessPDF/actions/workflows/ci.yml/badge.svg?branch=latest)](https://github.com/cvernooy23/limitlessPDF/actions/workflows/ci.yml)
+[![Build](https://github.com/cvernooy23/limitlessPDF/actions/workflows/build.yml/badge.svg?branch=latest)](https://github.com/cvernooy23/limitlessPDF/actions/workflows/build.yml)
+[![Nightly](https://github.com/cvernooy23/limitlessPDF/actions/workflows/nightly.yml/badge.svg)](https://github.com/cvernooy23/limitlessPDF/actions/workflows/nightly.yml)
+[![CodeQL](https://github.com/cvernooy23/limitlessPDF/actions/workflows/codeql.yml/badge.svg)](https://github.com/cvernooy23/limitlessPDF/actions/workflows/codeql.yml)
+[![GitHub release](https://img.shields.io/github/v/release/cvernooy23/limitlessPDF?include_prereleases&sort=semver)](https://github.com/cvernooy23/limitlessPDF/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+[![Rust](https://img.shields.io/badge/Rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8D8?logo=tauri)](https://v2.tauri.app/)
+
 A modern, glassy, cross-platform PDF **reader and editor**. Built with Tauri 2
 (Rust core) + Svelte 5 (web UI), using **pdf.js** for display and **PDFium** for
 editing/export.
@@ -31,7 +41,7 @@ editing/export.
 
 ## Prerequisites
 
-- **Node** >= 20 and **npm**
+- **Node** >= 22 (LTS) and **npm**
 - **Rust** (stable) via [rustup](https://rustup.rs)
 - Tauri OS dependencies -- see the
   [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
