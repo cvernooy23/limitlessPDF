@@ -16,11 +16,14 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            target: "" # default MSVC target -> .msi + .exe (+ portable, see below)
+            target: ""
+            targets: "" # default MSVC target -> .msi + .exe (+ portable, see below)
           - platform: macos-latest
-            target: "universal-apple-darwin" # Intel + Apple Silicon
+            target: "universal-apple-darwin"
+            targets: "aarch64-apple-darwin,x86_64-apple-darwin" # Intel + Apple Silicon
           - platform: ubuntu-22.04
             target: ""
+            targets: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -44,7 +47,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.targets }}
 
       - name: Cache cargo
         uses: swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
