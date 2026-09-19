@@ -1,6 +1,6 @@
 [package]
 name = "limitlesspdf"
-version = "0.1.0"
+version = "0.0.1"
 description = "A modern, glassy cross-platform PDF reader and editor"
 authors = ["limitlessPDF"]
 edition = "2021"
