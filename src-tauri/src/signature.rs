@@ -76,8 +76,9 @@ fn collect_sig_dicts(doc: &Document) -> Vec<(String, Vec<(Vec<u8>, Object)>)> {
         None => return results,
     };
 
+    let mut visited = std::collections::HashSet::new();
     for field_id in fields {
-        collect_sig_fields_recursive(doc, field_id, String::new(), &mut results);
+        collect_sig_fields_recursive(doc, field_id, String::new(), &mut results, &mut visited);
     }
 
     results
@@ -90,7 +91,13 @@ fn collect_sig_fields_recursive(
     obj_id: ObjectId,
     parent_name: String,
     out: &mut Vec<(String, Vec<(Vec<u8>, Object)>)>,
+    visited: &mut std::collections::HashSet<ObjectId>,
 ) {
+    // Guard against circular /Kids references that would overflow the stack.
+    if !visited.insert(obj_id) {
+        return;
+    }
+
     let dict = match doc.objects.get(&obj_id).and_then(|o| o.as_dict().ok()) {
         Some(d) => d,
         None => return,
@@ -133,7 +140,7 @@ fn collect_sig_fields_recursive(
         if let Ok(arr) = resolve_obj(doc, kids).as_array() {
             for kid in arr {
                 if let Ok(id) = kid.as_reference() {
-                    collect_sig_fields_recursive(doc, id, fq_name.clone(), out);
+                    collect_sig_fields_recursive(doc, id, fq_name.clone(), out, visited);
                 }
             }
         }
@@ -248,18 +255,22 @@ fn check_byte_coverage(br: &[i64], file_len: usize) -> bool {
         return false;
     }
     let (off1, len1, off2, len2) = (br[0], br[1], br[2], br[3]);
+    // All values must be non-negative to be meaningful.
+    if off1 < 0 || len1 < 0 || off2 < 0 || len2 < 0 {
+        return false;
+    }
     // Range 1 must start at the beginning.
     if off1 != 0 {
         return false;
     }
     // The gap between the two ranges is the signature placeholder.
-    let gap_start = off1 + len1;
-    if gap_start != off2 - (off2 - gap_start) {
-        // off2 should be > gap_start; the gap is the /Contents hex string.
+    // off2 should be > off1 + len1.
+    if off2 < off1 + len1 {
+        return false;
     }
     // Range 2 must end exactly at EOF.
-    let end = off2 + len2;
-    end as usize == file_len
+    let end = (off2 + len2) as usize;
+    end == file_len
 }
 
 // ── PKCS#7 / CMS parsing (minimal, no external crate) ───────────────────
@@ -554,25 +565,31 @@ fn pdf_string(obj: &Object) -> Option<String> {
 /// human-readable form.
 fn parse_pdf_date(raw: &str) -> String {
     let s = raw.strip_prefix("D:").unwrap_or(raw);
-    if s.len() >= 14 {
-        let yyyy = &s[0..4];
-        let mm = &s[4..6];
-        let dd = &s[6..8];
-        let hh = &s[8..10];
-        let mi = &s[10..12];
-        let ss = &s[12..14];
-        let tz = if s.len() > 14 { &s[14..] } else { "" };
-        let tz_clean = tz.replace('\'', ":");
-        format!("{yyyy}-{mm}-{dd} {hh}:{mi}:{ss}{tz_clean}")
-    } else {
-        s.to_string()
+    // Date strings must be pure ASCII; non-ASCII means a malformed PDF —
+    // return as-is rather than panicking on a multi-byte char boundary.
+    if !s.is_ascii() || s.len() < 14 {
+        return s.to_string();
     }
+    let yyyy = &s[0..4];
+    let mm = &s[4..6];
+    let dd = &s[6..8];
+    let hh = &s[8..10];
+    let mi = &s[10..12];
+    let ss = &s[12..14];
+    let tz = if s.len() > 14 { &s[14..] } else { "" };
+    let tz_clean = tz.replace('\'', ":");
+    format!("{yyyy}-{mm}-{dd} {hh}:{mi}:{ss}{tz_clean}")
 }
 
 /// Parse an ASN.1 UTCTime (tag 0x17) or GeneralizedTime (tag 0x18) into a
 /// readable date string.
 fn parse_asn1_time(tag: u8, bytes: &[u8]) -> String {
     let s = String::from_utf8_lossy(bytes);
+    // Time strings must be pure ASCII; bail early on non-ASCII to avoid
+    // panicking on a multi-byte char boundary when slicing by byte index.
+    if !s.is_ascii() {
+        return s.to_string();
+    }
     if tag == 0x17 {
         // UTCTime: YYMMDDHHmmSSZ
         if s.len() >= 12 {
