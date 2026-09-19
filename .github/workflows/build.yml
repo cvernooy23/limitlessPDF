@@ -17,10 +17,10 @@ jobs:
         include:
           - platform: windows-latest
             target: ""
-            targets: "" # default MSVC target -> .msi + .exe (+ portable, see below)
+            targets: ""
           - platform: macos-latest
             target: "universal-apple-darwin"
-            targets: "aarch64-apple-darwin,x86_64-apple-darwin" # Intel + Apple Silicon
+            targets: "aarch64-apple-darwin,x86_64-apple-darwin"
           - platform: ubuntu-22.04
             target: ""
             targets: ""
@@ -29,7 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # --- Linux system deps for Tauri (WebKitGTK etc.) ---
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -57,10 +56,6 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
-      # PDFium binaries are fetched by your release script / bindgen step.
-      # For CI we rely on the runtime-loaded library; bundling is handled in
-      # the packaging step (see README "PDFium binaries").
-
       - name: Build app
         uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
         env:
@@ -73,6 +68,43 @@ jobs:
         with:
           name: limitlesspdf-${{ matrix.platform }}
           path: |
-            src-tauri/target/**/release/bundle/**
-            src-tauri/target/**/release/limitlessPDF*
+            src-tauri/target/**/release/bundle/**/*.msi
+            src-tauri/target/**/release/bundle/**/*.exe
+            src-tauri/target/**/release/bundle/**/*.dmg
+            src-tauri/target/**/release/bundle/**/*.deb
+            src-tauri/target/**/release/bundle/**/*.AppImage
           if-no-files-found: ignore
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Flatten binaries
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( \
+            -name "*.msi" -o -name "*.exe" -o \
+            -name "*.dmg" -o -name "*.deb" -o \
+            -name "*.AppImage" \
+          \) -exec cp {} release-assets/ \;
+          ls -lah release-assets/
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            release-assets/*
