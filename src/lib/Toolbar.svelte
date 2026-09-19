@@ -49,6 +49,20 @@
       },
       { id: "note", label: "Note", icon: "M5 4h14v10l-4 4H5z", enabled: true, mode: "note" },
       { id: "draw", label: "Draw", icon: "M4 18l9-9 2 2-9 9H4z", enabled: true, mode: "draw" },
+      {
+        id: "underline",
+        label: "Underline",
+        icon: "M6 19h12M8 5v9a4 4 0 008 0V5",
+        enabled: true,
+        mode: "underline",
+      },
+      {
+        id: "strikethrough",
+        label: "Strikethrough",
+        icon: "M5 12h14M12 5c-2.8 0-4 1.5-4 3 0 1 .5 1.8 1.5 2.3M12 19c2.8 0 4-1.5 4-3 0-1-.5-1.8-1.5-2.3",
+        enabled: true,
+        mode: "strikethrough",
+      },
     ],
     [
       { id: "text", label: "Text", icon: "M5 5h14M12 5v14M9 19h6", enabled: true, mode: "text" },

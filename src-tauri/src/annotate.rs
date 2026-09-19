@@ -1,5 +1,5 @@
 //! Persist annotations into a PDF as standard annotation objects (Highlight,
-//! Ink, Text) using pure-Rust `lopdf`. Each markup annotation also gets an
+//! Underline, StrikeOut, Ink, Text) using pure-Rust `lopdf`. Each markup annotation also gets an
 //! appearance stream (/AP) so it renders consistently across viewers.
 //!
 //! Coordinates arrive already converted to PDF user space (origin bottom-left)
@@ -50,6 +50,16 @@ pub enum SaveAnnotation {
         y: f32,
         text: String,
     },
+    Underline {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+    },
+    Strikethrough {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+    },
 }
 
 impl SaveAnnotation {
@@ -58,7 +68,9 @@ impl SaveAnnotation {
         (match self {
             SaveAnnotation::Highlight { out_index, .. }
             | SaveAnnotation::Draw { out_index, .. }
-            | SaveAnnotation::Note { out_index, .. } => *out_index,
+            | SaveAnnotation::Note { out_index, .. }
+            | SaveAnnotation::Underline { out_index, .. }
+            | SaveAnnotation::Strikethrough { out_index, .. } => *out_index,
         }) as usize
     }
 }
@@ -415,6 +427,70 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
             Ok(doc.add_object(Object::Dictionary(d)))
         }
 
+        SaveAnnotation::Underline { color, rect, .. } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+
+            // Appearance: a line along the bottom edge of the rect.
+            let content =
+                format!("{r:.4} {g:.4} {b:.4} RG\n1 w\n{x0:.2} {y0:.2} m {x1:.2} {y0:.2} l S\n");
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0, y0 - 1.0, x1, y0 + 1.0));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Underline", x0, y0, x1, y1, r, g, b);
+            d.set(
+                "QuadPoints",
+                Object::Array(vec![
+                    x0.into(),
+                    y1.into(),
+                    x1.into(),
+                    y1.into(),
+                    x0.into(),
+                    y0.into(),
+                    x1.into(),
+                    y0.into(),
+                ]),
+            );
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
+        SaveAnnotation::Strikethrough { color, rect, .. } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+            let mid_y = (y0 + y1) / 2.0;
+
+            // Appearance: a line through the vertical center of the rect.
+            let content = format!(
+                "{r:.4} {g:.4} {b:.4} RG\n1 w\n{x0:.2} {mid_y:.2} m {x1:.2} {mid_y:.2} l S\n"
+            );
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0, mid_y - 1.0, x1, mid_y + 1.0));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("StrikeOut", x0, y0, x1, y1, r, g, b);
+            d.set(
+                "QuadPoints",
+                Object::Array(vec![
+                    x0.into(),
+                    y1.into(),
+                    x1.into(),
+                    y1.into(),
+                    x0.into(),
+                    y0.into(),
+                    x1.into(),
+                    y0.into(),
+                ]),
+            );
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
         SaveAnnotation::Note {
             color, x, y, text, ..
         } => {
@@ -524,5 +600,276 @@ fn pdf_string(s: &str) -> Object {
             bytes.extend_from_slice(&unit.to_be_bytes());
         }
         Object::String(bytes, StringFormat::Literal)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_color_hex6() {
+        let (r, g, b) = parse_color("#ff8000");
+        assert!((r - 1.0).abs() < 0.01);
+        assert!((g - 0.502).abs() < 0.01);
+        assert!((b - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_color_no_hash() {
+        let (r, g, b) = parse_color("ff0000");
+        assert!((r - 1.0).abs() < 0.01);
+        assert!((g - 0.0).abs() < 0.01);
+        assert!((b - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_color_short_fallback() {
+        let (r, g, b) = parse_color("#abc");
+        assert!((r - 1.0).abs() < 0.01);
+        assert!((g - 0.85).abs() < 0.01);
+        assert!((b - 0.2).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_color_black() {
+        let (r, g, b) = parse_color("#000000");
+        assert!(r.abs() < 0.001);
+        assert!(g.abs() < 0.001);
+        assert!(b.abs() < 0.001);
+    }
+
+    #[test]
+    fn parse_color_white() {
+        let (r, g, b) = parse_color("#ffffff");
+        assert!((r - 1.0).abs() < 0.001);
+        assert!((g - 1.0).abs() < 0.001);
+        assert!((b - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn normalize_already_ordered() {
+        assert_eq!(normalize(10.0, 20.0, 30.0, 40.0), (10.0, 20.0, 30.0, 40.0));
+    }
+
+    #[test]
+    fn normalize_swapped() {
+        assert_eq!(normalize(30.0, 40.0, 10.0, 20.0), (10.0, 20.0, 30.0, 40.0));
+    }
+
+    #[test]
+    fn normalize_mixed() {
+        let (x0, y0, x1, y1) = normalize(50.0, 10.0, 20.0, 80.0);
+        assert_eq!((x0, y0, x1, y1), (20.0, 10.0, 50.0, 80.0));
+    }
+
+    #[test]
+    fn arr4_produces_array_of_reals() {
+        let obj = arr4(1.0, 2.0, 3.0, 4.0);
+        match obj {
+            Object::Array(a) => assert_eq!(a.len(), 4),
+            _ => panic!("Expected Array"),
+        }
+    }
+
+    #[test]
+    fn pdf_string_ascii() {
+        match pdf_string("Hello") {
+            Object::String(bytes, StringFormat::Literal) => {
+                assert_eq!(bytes, b"Hello");
+            }
+            _ => panic!("Expected literal string"),
+        }
+    }
+
+    #[test]
+    fn pdf_string_unicode() {
+        match pdf_string("\u{00e9}") {
+            Object::String(bytes, StringFormat::Literal) => {
+                assert_eq!(bytes[0], 0xFE);
+                assert_eq!(bytes[1], 0xFF);
+                assert!(bytes.len() > 2);
+            }
+            _ => panic!("Expected literal string"),
+        }
+    }
+
+    #[test]
+    fn annot_base_sets_type_and_subtype() {
+        let d = annot_base("Highlight", 10.0, 20.0, 110.0, 40.0, 1.0, 0.85, 0.2);
+        assert_eq!(d.get(b"Type").unwrap().as_name().unwrap(), b"Annot");
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Highlight");
+    }
+
+    #[test]
+    fn annot_base_sets_rect() {
+        let d = annot_base("Text", 5.0, 10.0, 25.0, 30.0, 0.0, 0.0, 0.0);
+        let rect = d.get(b"Rect").unwrap().as_array().unwrap();
+        assert_eq!(rect.len(), 4);
+    }
+
+    #[test]
+    fn annot_base_sets_print_flag() {
+        let d = annot_base("Ink", 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0);
+        assert_eq!(d.get(b"F").unwrap().as_i64().unwrap(), 4);
+    }
+
+    fn make_doc() -> Document {
+        Document::with_version("1.7")
+    }
+
+    #[test]
+    fn build_highlight_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Highlight {
+            out_index: 0,
+            color: "#ffff00".to_string(),
+            rect: RectPdf {
+                x0: 72.0,
+                y0: 700.0,
+                x1: 200.0,
+                y1: 720.0,
+            },
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Highlight");
+        assert!(d.get(b"QuadPoints").is_ok());
+        assert!(d.get(b"AP").is_ok());
+    }
+
+    #[test]
+    fn build_underline_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Underline {
+            out_index: 0,
+            color: "#ff0000".to_string(),
+            rect: RectPdf {
+                x0: 72.0,
+                y0: 700.0,
+                x1: 200.0,
+                y1: 720.0,
+            },
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Underline");
+        assert!(d.get(b"QuadPoints").is_ok());
+    }
+
+    #[test]
+    fn build_strikethrough_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Strikethrough {
+            out_index: 0,
+            color: "#0000ff".to_string(),
+            rect: RectPdf {
+                x0: 72.0,
+                y0: 700.0,
+                x1: 200.0,
+                y1: 720.0,
+            },
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"StrikeOut");
+        assert!(d.get(b"QuadPoints").is_ok());
+    }
+
+    #[test]
+    fn build_draw_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Draw {
+            out_index: 0,
+            color: "#000000".to_string(),
+            width: 2.0,
+            paths: vec![vec![10.0, 20.0, 30.0, 40.0]],
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Ink");
+        assert!(d.get(b"InkList").is_ok());
+        assert!(d.get(b"BS").is_ok());
+    }
+
+    #[test]
+    fn build_note_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Note {
+            out_index: 0,
+            color: "#ffff00".to_string(),
+            x: 100.0,
+            y: 500.0,
+            text: "A note".to_string(),
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Text");
+        assert!(d.get(b"Contents").is_ok());
+    }
+
+    #[test]
+    fn attach_annots_creates_annots_array() {
+        let mut doc = make_doc();
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Type", Object::Name(b"Page".to_vec()));
+        let page_id = doc.add_object(Object::Dictionary(page_dict));
+
+        let mut annot_dict = Dictionary::new();
+        annot_dict.set("Type", Object::Name(b"Annot".to_vec()));
+        let annot_id = doc.add_object(Object::Dictionary(annot_dict));
+
+        attach_annots(&mut doc, page_id, &[annot_id]).unwrap();
+
+        let pd = doc.get_dictionary(page_id).unwrap();
+        let annots = pd.get(b"Annots").unwrap().as_array().unwrap();
+        assert_eq!(annots.len(), 1);
+    }
+
+    #[test]
+    fn attach_annots_appends_to_existing() {
+        let mut doc = make_doc();
+        let mut annot1 = Dictionary::new();
+        annot1.set("Type", Object::Name(b"Annot".to_vec()));
+        let a1_id = doc.add_object(Object::Dictionary(annot1));
+
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Type", Object::Name(b"Page".to_vec()));
+        page_dict.set("Annots", Object::Array(vec![Object::Reference(a1_id)]));
+        let page_id = doc.add_object(Object::Dictionary(page_dict));
+
+        let mut annot2 = Dictionary::new();
+        annot2.set("Type", Object::Name(b"Annot".to_vec()));
+        let a2_id = doc.add_object(Object::Dictionary(annot2));
+
+        attach_annots(&mut doc, page_id, &[a2_id]).unwrap();
+
+        let pd = doc.get_dictionary(page_id).unwrap();
+        let annots = pd.get(b"Annots").unwrap().as_array().unwrap();
+        assert_eq!(annots.len(), 2);
+    }
+
+    #[test]
+    fn out_index_returns_correct_value() {
+        let anno = SaveAnnotation::Highlight {
+            out_index: 5,
+            color: "#ff0000".to_string(),
+            rect: RectPdf {
+                x0: 0.0,
+                y0: 0.0,
+                x1: 1.0,
+                y1: 1.0,
+            },
+        };
+        assert_eq!(anno.out_index(), 5);
+
+        let anno2 = SaveAnnotation::Note {
+            out_index: 3,
+            color: "#ff0000".to_string(),
+            x: 0.0,
+            y: 0.0,
+            text: "test".to_string(),
+        };
+        assert_eq!(anno2.out_index(), 3);
     }
 }

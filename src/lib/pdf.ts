@@ -25,7 +25,19 @@ export type SavePayload =
       rect: { x0: number; y0: number; x1: number; y1: number };
     }
   | { type: "draw"; out_index: number; color: string; width: number; paths: number[][] }
-  | { type: "note"; out_index: number; color: string; x: number; y: number; text: string };
+  | { type: "note"; out_index: number; color: string; x: number; y: number; text: string }
+  | {
+      type: "underline";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+    }
+  | {
+      type: "strikethrough";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+    };
 
 export interface LoadedPdf {
   doc: PdfDocument;
@@ -448,6 +460,10 @@ export async function annotationsToPayload(
         stroke.flatMap((p) => v!.convertToPdfPoint(p.x, p.y) as number[]),
       );
       out.push({ type: "draw", out_index: idx, color: a.color, width: a.width, paths });
+    } else if (a.type === "underline" || a.type === "strikethrough") {
+      const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
+      const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
+      out.push({ type: a.type, out_index: idx, color: a.color, rect: { x0, y0, x1, y1 } });
     } else {
       const [x, y] = v.convertToPdfPoint(a.x, a.y);
       out.push({ type: "note", out_index: idx, color: a.color, x, y, text: a.text });
