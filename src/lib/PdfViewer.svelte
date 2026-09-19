@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { pageRender, textLayerRender, type PdfDocument, type PageItem, type TextBox, type FormField } from "./pdf";
+  import {
+    pageRender,
+    textLayerRender,
+    type PdfDocument,
+    type PageItem,
+    type TextBox,
+    type FormField,
+  } from "./pdf";
   import AnnotationLayer from "./AnnotationLayer.svelte";
   import TextBoxLayer from "./TextBoxLayer.svelte";
   import FormLayer from "./FormLayer.svelte";
@@ -213,10 +220,17 @@
       onpointerdown={(e) => onPagePointerDown(e, pg.key)}
     >
       {#if d}
-        <canvas use:pageRender={{ doc: d, page: pg.srcPage, scale, rotation: pg.rotation }}></canvas>
+        <canvas use:pageRender={{ doc: d, page: pg.srcPage, scale, rotation: pg.rotation }}
+        ></canvas>
         <div
           class="textLayer"
-          use:textLayerRender={{ doc: d, page: pg.srcPage, scale, rotation: pg.rotation, onReady: (_p, divs) => handleTextReady(pg.key, divs) }}
+          use:textLayerRender={{
+            doc: d,
+            page: pg.srcPage,
+            scale,
+            rotation: pg.rotation,
+            onReady: (_p, divs) => handleTextReady(pg.key, divs),
+          }}
         ></div>
       {/if}
       <AnnotationLayer

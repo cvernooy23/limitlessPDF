@@ -23,9 +23,12 @@
 <aside class="glass flex w-64 shrink-0 flex-col gap-2 rounded-2xl p-3">
   <div class="flex items-center justify-between px-1">
     <span class="text-xs font-medium uppercase tracking-wider text-[var(--color-ink-dim)]">
-      Comments{#if notes.length}<span class="ml-1 normal-case opacity-70">({notes.length})</span>{/if}
+      Comments{#if notes.length}<span class="ml-1 normal-case opacity-70">({notes.length})</span
+        >{/if}
     </span>
-    <button class="closebtn glass-hover" onclick={onClose} aria-label="Close comments" title="Close">✕</button>
+    <button class="closebtn glass-hover" onclick={onClose} aria-label="Close comments" title="Close"
+      >✕</button
+    >
   </div>
 
   <div class="flex flex-col gap-2 overflow-y-auto pr-1">
@@ -56,8 +59,8 @@
               onDelete(note.id);
             }}
             aria-label="Delete comment"
-            title="Delete"
-          >🗑</button>
+            title="Delete">🗑</button
+          >
         </div>
         <textarea
           class="note-text"
@@ -65,8 +68,7 @@
           placeholder="Write a comment…"
           value={note.text}
           oninput={(e) => onEdit(note.id, (e.target as HTMLTextAreaElement).value)}
-          onclick={(e) => e.stopPropagation()}
-        ></textarea>
+          onclick={(e) => e.stopPropagation()}></textarea>
       </div>
     {/each}
   </div>

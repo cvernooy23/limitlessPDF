@@ -32,13 +32,10 @@
   </div>
 
   <div class="flex items-center gap-1.5">
-    <button
-      class="win-btn glass-hover"
-      onclick={minimize}
-      aria-label="Minimize"
-      title="Minimize"
-    >
-      <svg width="11" height="11" viewBox="0 0 11 11"><rect y="5" width="11" height="1" fill="currentColor" /></svg>
+    <button class="win-btn glass-hover" onclick={minimize} aria-label="Minimize" title="Minimize">
+      <svg width="11" height="11" viewBox="0 0 11 11"
+        ><rect y="5" width="11" height="1" fill="currentColor" /></svg
+      >
     </button>
     <button
       class="win-btn glass-hover"
@@ -46,15 +43,14 @@
       aria-label="Maximize"
       title="Maximize"
     >
-      <svg width="11" height="11" viewBox="0 0 11 11"><rect x="0.5" y="0.5" width="10" height="10" fill="none" stroke="currentColor" /></svg>
+      <svg width="11" height="11" viewBox="0 0 11 11"
+        ><rect x="0.5" y="0.5" width="10" height="10" fill="none" stroke="currentColor" /></svg
+      >
     </button>
-    <button
-      class="win-btn win-close"
-      onclick={close}
-      aria-label="Close"
-      title="Close"
-    >
-      <svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 1l9 9M10 1l-9 9" stroke="currentColor" stroke-width="1.2" /></svg>
+    <button class="win-btn win-close" onclick={close} aria-label="Close" title="Close">
+      <svg width="11" height="11" viewBox="0 0 11 11"
+        ><path d="M1 1l9 9M10 1l-9 9" stroke="currentColor" stroke-width="1.2" /></svg
+      >
     </button>
   </div>
 </header>

@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { newId, inkToPath, type Annotation, type Point, type Tool } from "./annotations";
+  import {
+    newId,
+    inkToPath,
+    type Annotation,
+    type Point,
+    type Rect,
+    type Tool,
+  } from "./annotations";
 
   const {
     pageKey,
@@ -28,6 +35,7 @@
   let start: Point | null = null;
   let draftRect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
   let draftInk = $state<Point[] | null>(null);
+  let draftLine = $state<{ rect: Rect; mode: "underline" | "strikethrough" } | null>(null);
 
   function toLocal(e: PointerEvent): Point {
     const r = svgEl.getBoundingClientRect();
@@ -52,6 +60,8 @@
     drawing = true;
     start = p;
     if (tool === "highlight") draftRect = { x: p.x, y: p.y, w: 0, h: 0 };
+    else if (tool === "underline" || tool === "strikethrough")
+      draftLine = { rect: { x: p.x, y: p.y, w: 0, h: 0 }, mode: tool };
     else if (tool === "draw") draftInk = [p];
   }
 
@@ -65,6 +75,16 @@
         w: Math.abs(p.x - start.x),
         h: Math.abs(p.y - start.y),
       };
+    } else if ((tool === "underline" || tool === "strikethrough") && draftLine && start) {
+      draftLine = {
+        ...draftLine,
+        rect: {
+          x: Math.min(start.x, p.x),
+          y: Math.min(start.y, p.y),
+          w: Math.abs(p.x - start.x),
+          h: Math.abs(p.y - start.y),
+        },
+      };
     } else if (tool === "draw" && draftInk) {
       draftInk = [...draftInk, p];
     }
@@ -75,16 +95,30 @@
     drawing = false;
     if (tool === "highlight" && draftRect && draftRect.w > 3 && draftRect.h > 3) {
       onAdd({ id: newId(), pageKey, color, type: "highlight", rect: { ...draftRect } });
+    } else if (
+      (tool === "underline" || tool === "strikethrough") &&
+      draftLine &&
+      draftLine.rect.w > 3 &&
+      draftLine.rect.h > 3
+    ) {
+      onAdd({ id: newId(), pageKey, color, type: draftLine.mode, rect: { ...draftLine.rect } });
     } else if (tool === "draw" && draftInk && draftInk.length > 1) {
       onAdd({ id: newId(), pageKey, color, type: "draw", paths: [draftInk], width: inkWidth });
     }
     draftRect = null;
     draftInk = null;
+    draftLine = null;
     start = null;
   }
 
   // Drawing tools that this SVG handles. "text" is handled by TextBoxLayer.
-  const isActive = $derived(tool === "highlight" || tool === "draw" || tool === "note");
+  const isActive = $derived(
+    tool === "highlight" ||
+      tool === "underline" ||
+      tool === "strikethrough" ||
+      tool === "draw" ||
+      tool === "note",
+  );
 </script>
 
 <!--
@@ -118,6 +152,32 @@
         fill-opacity="0.35"
         style="mix-blend-mode: multiply; pointer-events: none;"
         class="shape"
+        class:selected={a.id === selectedId}
+      />
+    {:else if a.type === "underline"}
+      <line
+        x1={a.rect.x * scale}
+        y1={(a.rect.y + a.rect.h) * scale}
+        x2={(a.rect.x + a.rect.w) * scale}
+        y2={(a.rect.y + a.rect.h) * scale}
+        stroke={a.color}
+        stroke-width={2 * scale}
+        stroke-linecap="round"
+        style="pointer-events: none;"
+        class="shape line-shape"
+        class:selected={a.id === selectedId}
+      />
+    {:else if a.type === "strikethrough"}
+      <line
+        x1={a.rect.x * scale}
+        y1={(a.rect.y + a.rect.h / 2) * scale}
+        x2={(a.rect.x + a.rect.w) * scale}
+        y2={(a.rect.y + a.rect.h / 2) * scale}
+        stroke={a.color}
+        stroke-width={2 * scale}
+        stroke-linecap="round"
+        style="pointer-events: none;"
+        class="shape line-shape"
         class:selected={a.id === selectedId}
       />
     {:else if a.type === "draw"}
@@ -161,6 +221,21 @@
       style="mix-blend-mode: multiply"
     />
   {/if}
+  {#if draftLine}
+    <line
+      x1={draftLine.rect.x * scale}
+      y1={(draftLine.mode === "underline"
+        ? draftLine.rect.y + draftLine.rect.h
+        : draftLine.rect.y + draftLine.rect.h / 2) * scale}
+      x2={(draftLine.rect.x + draftLine.rect.w) * scale}
+      y2={(draftLine.mode === "underline"
+        ? draftLine.rect.y + draftLine.rect.h
+        : draftLine.rect.y + draftLine.rect.h / 2) * scale}
+      stroke={color}
+      stroke-width={2 * scale}
+      stroke-linecap="round"
+    />
+  {/if}
   {#if draftInk}
     <path
       d={inkToPath([draftInk], scale)}
@@ -186,6 +261,9 @@
   rect.shape.selected {
     stroke: var(--color-accent);
     stroke-width: 1.5;
+  }
+  line.shape.selected {
+    filter: drop-shadow(0 0 3px var(--color-accent));
   }
   path.shape.selected {
     filter: drop-shadow(0 0 3px var(--color-accent));

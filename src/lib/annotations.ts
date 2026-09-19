@@ -5,7 +5,8 @@
  * annotations into the file (Rust/PDFium step).
  */
 
-export type Tool = "none" | "highlight" | "draw" | "note" | "text" | "edittext";
+export type Tool =
+  "none" | "highlight" | "underline" | "strikethrough" | "draw" | "note" | "text" | "edittext";
 
 export interface Point {
   x: number;
@@ -39,7 +40,20 @@ export interface NoteAnnotation extends Base {
   y: number;
   text: string;
 }
-export type Annotation = HighlightAnnotation | DrawAnnotation | NoteAnnotation;
+export interface UnderlineAnnotation extends Base {
+  type: "underline";
+  rect: Rect;
+}
+export interface StrikethroughAnnotation extends Base {
+  type: "strikethrough";
+  rect: Rect;
+}
+export type Annotation =
+  | HighlightAnnotation
+  | UnderlineAnnotation
+  | StrikethroughAnnotation
+  | DrawAnnotation
+  | NoteAnnotation;
 
 export const ANNOTATION_COLORS = ["#ffd23f", "#ff7a90", "#6ee7b7", "#6ea8ff", "#c4a3ff"];
 
@@ -72,15 +86,10 @@ function segmentDistance(
  * annotation under (x, y), or null. Done in JS rather than via SVG hit-testing,
  * which proved unreliable inside the webview.
  */
-export function hitTest(
-  annos: Annotation[],
-  x: number,
-  y: number,
-  scale: number,
-): string | null {
+export function hitTest(annos: Annotation[], x: number, y: number, scale: number): string | null {
   for (let i = annos.length - 1; i >= 0; i--) {
     const a = annos[i];
-    if (a.type === "highlight") {
+    if (a.type === "highlight" || a.type === "underline" || a.type === "strikethrough") {
       const x0 = a.rect.x * scale;
       const y0 = a.rect.y * scale;
       const x1 = (a.rect.x + a.rect.w) * scale;
@@ -120,7 +129,9 @@ export function inkToPath(paths: Point[][], scale: number): string {
   return paths
     .map((stroke) =>
       stroke
-        .map((p, i) => `${i === 0 ? "M" : "L"}${(p.x * scale).toFixed(2)} ${(p.y * scale).toFixed(2)}`)
+        .map(
+          (p, i) => `${i === 0 ? "M" : "L"}${(p.x * scale).toFixed(2)} ${(p.y * scale).toFixed(2)}`,
+        )
         .join(" "),
     )
     .join(" ");

@@ -13,21 +13,31 @@
     "tauri": "tauri",
     "get-pdfium": "node scripts/get-pdfium.mjs",
     "app:dev": "tauri dev",
-    "app:build": "npm run get-pdfium && tauri build"
+    "app:build": "npm run get-pdfium && tauri build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-dialog": "^2.2.0",
-    "pdfjs-dist": "^5.0.0"
+    "devalue": "^5.9.4",
+    "pdfjs-dist": "^6.2.108"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/vite": "^4.0.0",
     "@tauri-apps/cli": "^2.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.23.0",
+    "prettier": "^3.9.8",
+    "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.16.0",
     "svelte-check": "^4.1.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^5.0.1"
   }
 }

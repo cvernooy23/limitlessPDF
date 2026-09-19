@@ -56,7 +56,10 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
         values.iter().map(|v| (v.field_name.as_str(), v)).collect();
 
     // Viewers regenerate /AP from /V + /DA + /DR when this is set.
-    if let Ok(af) = doc.get_object_mut(acroform_id).and_then(|o| o.as_dict_mut()) {
+    if let Ok(af) = doc
+        .get_object_mut(acroform_id)
+        .and_then(|o| o.as_dict_mut())
+    {
         af.set("NeedAppearances", Object::Boolean(true));
     }
 
@@ -74,7 +77,9 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
     let mut stack: Vec<(ObjectId, String)> =
         roots.into_iter().map(|r| (r, String::new())).collect();
     while let Some((id, prefix)) = stack.pop() {
-        let Ok(d) = doc.get_dictionary(id) else { continue };
+        let Ok(d) = doc.get_dictionary(id) else {
+            continue;
+        };
         let part = d
             .get(b"T")
             .ok()
@@ -96,7 +101,11 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
         let child_fields: Vec<ObjectId> = kids
             .iter()
             .copied()
-            .filter(|k| doc.get_dictionary(*k).map(|kd| kd.get(b"T").is_ok()).unwrap_or(false))
+            .filter(|k| {
+                doc.get_dictionary(*k)
+                    .map(|kd| kd.get(b"T").is_ok())
+                    .unwrap_or(false)
+            })
             .collect();
         if !child_fields.is_empty() {
             for c in child_fields {
@@ -104,25 +113,35 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
             }
         } else {
             let widgets = if kids.is_empty() { vec![id] } else { kids };
-            targets.push(Target { field_id: id, name, widgets });
+            targets.push(Target {
+                field_id: id,
+                name,
+                widgets,
+            });
         }
     }
 
     // Phase 2 (mutable): set values on the collected targets.
     for t in targets {
-        let Some(v) = map.get(t.name.as_str()) else { continue };
+        let Some(v) = map.get(t.name.as_str()) else {
+            continue;
+        };
         match v.kind.as_str() {
             "checkbox" | "radio" => {
-                let on = if v.value.is_empty() { "Off".to_string() } else { v.value.clone() };
+                let on = if v.value.is_empty() {
+                    "Off".to_string()
+                } else {
+                    v.value.clone()
+                };
                 set_name(doc, t.field_id, "V", &on);
                 for w in &t.widgets {
                     let won = widget_on_state(doc, *w);
-                    let as_val =
-                        if !v.value.is_empty() && won.as_deref() == Some(v.value.as_str()) {
-                            v.value.clone()
-                        } else {
-                            "Off".to_string()
-                        };
+                    let as_val = if !v.value.is_empty() && won.as_deref() == Some(v.value.as_str())
+                    {
+                        v.value.clone()
+                    } else {
+                        "Off".to_string()
+                    };
                     set_name(doc, *w, "AS", &as_val);
                 }
             }
@@ -143,7 +162,9 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
 pub fn strip_widgets(doc: &mut Document, pages: &[ObjectId]) {
     for &pid in pages {
         let refs: Vec<ObjectId> = {
-            let Ok(pd) = doc.get_dictionary(pid) else { continue };
+            let Ok(pd) = doc.get_dictionary(pid) else {
+                continue;
+            };
             match pd.get(b"Annots") {
                 Ok(Object::Array(a)) => a.iter().filter_map(|o| o.as_reference().ok()).collect(),
                 Ok(Object::Reference(r)) => doc
@@ -228,5 +249,156 @@ fn pdf_string(s: &str) -> Object {
             bytes.extend_from_slice(&unit.to_be_bytes());
         }
         Object::String(bytes, StringFormat::Literal)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_doc_with_form() -> (Document, ObjectId, ObjectId) {
+        let mut doc = Document::with_version("1.7");
+
+        // Create a text field widget
+        let mut field = Dictionary::new();
+        field.set("Type", Object::Name(b"Annot".to_vec()));
+        field.set("Subtype", Object::Name(b"Widget".to_vec()));
+        field.set("FT", Object::Name(b"Tx".to_vec()));
+        field.set("T", Object::String(b"name".to_vec(), StringFormat::Literal));
+        let field_id = doc.add_object(Object::Dictionary(field));
+
+        // Create AcroForm
+        let mut acroform = Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(field_id)]));
+        let acroform_id = doc.add_object(Object::Dictionary(acroform));
+
+        // Create page with Annots
+        let mut page = Dictionary::new();
+        page.set("Type", Object::Name(b"Page".to_vec()));
+        page.set("Annots", Object::Array(vec![Object::Reference(field_id)]));
+        let page_id = doc.add_object(Object::Dictionary(page));
+
+        // Create catalog
+        let mut catalog = Dictionary::new();
+        catalog.set("Type", Object::Name(b"Catalog".to_vec()));
+        catalog.set("AcroForm", Object::Reference(acroform_id));
+        let catalog_id = doc.add_object(Object::Dictionary(catalog));
+
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+
+        (doc, acroform_id, page_id)
+    }
+
+    // ── acroform_of ──────────────────────────────────────────────────────
+
+    #[test]
+    fn acroform_of_finds_form() {
+        let (doc, acroform_id, _) = make_doc_with_form();
+        assert_eq!(acroform_of(&doc), Some(acroform_id));
+    }
+
+    #[test]
+    fn acroform_of_returns_none_without_form() {
+        let mut doc = Document::with_version("1.7");
+        let mut catalog = Dictionary::new();
+        catalog.set("Type", Object::Name(b"Catalog".to_vec()));
+        let catalog_id = doc.add_object(Object::Dictionary(catalog));
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+        assert_eq!(acroform_of(&doc), None);
+    }
+
+    // ── apply_values ─────────────────────────────────────────────────────
+
+    #[test]
+    fn apply_values_sets_text_field() {
+        let (mut doc, acroform_id, _) = make_doc_with_form();
+        let values = vec![FormValue {
+            field_name: "name".to_string(),
+            kind: "text".to_string(),
+            value: "John".to_string(),
+            on_state: String::new(),
+        }];
+        apply_values(&mut doc, acroform_id, &values);
+
+        // Check NeedAppearances was set
+        let af = doc.get_dictionary(acroform_id).unwrap();
+        assert_eq!(af.get(b"NeedAppearances").unwrap().as_bool().unwrap(), true);
+    }
+
+    #[test]
+    fn apply_values_does_nothing_for_empty() {
+        let (mut doc, acroform_id, _) = make_doc_with_form();
+        apply_values(&mut doc, acroform_id, &[]);
+        // NeedAppearances should NOT be set since values is empty
+        let af = doc.get_dictionary(acroform_id).unwrap();
+        assert!(af.get(b"NeedAppearances").is_err());
+    }
+
+    // ── strip_widgets ────────────────────────────────────────────────────
+
+    #[test]
+    fn strip_widgets_removes_widget_annots() {
+        let (mut doc, _, page_id) = make_doc_with_form();
+        strip_widgets(&mut doc, &[page_id]);
+        let pd = doc.get_dictionary(page_id).unwrap();
+        // Annots should be removed since all were widgets
+        assert!(pd.get(b"Annots").is_err());
+    }
+
+    #[test]
+    fn strip_widgets_keeps_non_widget_annots() {
+        let mut doc = Document::with_version("1.7");
+
+        // Non-widget annotation
+        let mut annot = Dictionary::new();
+        annot.set("Type", Object::Name(b"Annot".to_vec()));
+        annot.set("Subtype", Object::Name(b"Highlight".to_vec()));
+        let annot_id = doc.add_object(Object::Dictionary(annot));
+
+        // Widget annotation
+        let mut widget = Dictionary::new();
+        widget.set("Type", Object::Name(b"Annot".to_vec()));
+        widget.set("Subtype", Object::Name(b"Widget".to_vec()));
+        let widget_id = doc.add_object(Object::Dictionary(widget));
+
+        let mut page = Dictionary::new();
+        page.set("Type", Object::Name(b"Page".to_vec()));
+        page.set(
+            "Annots",
+            Object::Array(vec![
+                Object::Reference(annot_id),
+                Object::Reference(widget_id),
+            ]),
+        );
+        let page_id = doc.add_object(Object::Dictionary(page));
+
+        strip_widgets(&mut doc, &[page_id]);
+
+        let pd = doc.get_dictionary(page_id).unwrap();
+        let annots = pd.get(b"Annots").unwrap().as_array().unwrap();
+        assert_eq!(annots.len(), 1);
+    }
+
+    // ── pdf_string ───────────────────────────────────────────────────────
+
+    #[test]
+    fn pdf_string_ascii_literal() {
+        match pdf_string("hello") {
+            Object::String(bytes, StringFormat::Literal) => {
+                assert_eq!(bytes, b"hello");
+            }
+            _ => panic!("Expected literal string"),
+        }
+    }
+
+    #[test]
+    fn pdf_string_unicode_bom() {
+        match pdf_string("caf\u{00e9}") {
+            Object::String(bytes, StringFormat::Literal) => {
+                assert_eq!(bytes[0], 0xFE);
+                assert_eq!(bytes[1], 0xFF);
+            }
+            _ => panic!("Expected literal string"),
+        }
     }
 }

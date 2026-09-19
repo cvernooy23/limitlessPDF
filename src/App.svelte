@@ -7,6 +7,7 @@
   import PdfViewer from "./lib/PdfViewer.svelte";
   import CommentsPanel from "./lib/CommentsPanel.svelte";
   import OcrPanel from "./lib/OcrPanel.svelte";
+  import SignaturePanel from "./lib/SignaturePanel.svelte";
   import {
     ANNOTATION_COLORS,
     type Annotation,
@@ -86,6 +87,7 @@
   let selectedId = $state<string | null>(null);
   let commentsOpen = $state(false);
   let ocrOpen = $state(false);
+  let sigOpen = $state(false);
 
   // Content edits (PDFium): new text objects added to pages.
   let textBoxes = $state<TextBox[]>([]);
@@ -111,7 +113,7 @@
   let pwPrompt = $state<{ incorrect: boolean } | null>(null);
   let pwEntry = $state("");
   let pwResolve: ((value: string | null) => void) | null = null;
-  let openedPassword: string | null = null;
+  let openedPassword = $state<string | null>(null);
 
   function promptPassword(incorrect: boolean): Promise<string | null> {
     pwEntry = "";
@@ -196,13 +198,13 @@
     }
     updates.set(field.id, value);
     for (const [id, v] of updates) formValues.set(id, v);
-    formFields = formFields.map((f) => (updates.has(f.id) ? { ...f, value: updates.get(f.id)! } : f));
+    formFields = formFields.map((f) =>
+      updates.has(f.id) ? { ...f, value: updates.get(f.id)! } : f,
+    );
     dirty = true;
   }
 
-  const notes = $derived(
-    annotations.filter((a): a is NoteAnnotation => a.type === "note"),
-  );
+  const notes = $derived(annotations.filter((a): a is NoteAnnotation => a.type === "note"));
 
   onMount(async () => {
     if (!inTauri()) {
@@ -258,7 +260,7 @@
       openedPassword = pw ?? null;
 
       // Release any previously-loaded documents.
-      for (const d of docs.values()) d.destroy();
+      for (const d of docs.values()) d.cleanup();
       docs.clear();
       srcPaths.clear();
 
@@ -353,7 +355,8 @@
   }
 
   function movePage(from: number, to: number) {
-    if (from === to || from < 0 || to < 0 || from >= pageList.length || to >= pageList.length) return;
+    if (from === to || from < 0 || to < 0 || from >= pageList.length || to >= pageList.length)
+      return;
     const next = pageList.slice();
     const [item] = next.splice(from, 1);
     next.splice(to, 0, item);
@@ -374,8 +377,14 @@
     if (onPage.length && pageDoc) {
       const page = await pageDoc.getPage(item.srcPage);
       const base = page.rotate;
-      const oldVp = page.getViewport({ scale: 1, rotation: (((base + oldDelta) % 360) + 360) % 360 });
-      const newVp = page.getViewport({ scale: 1, rotation: (((base + newDelta) % 360) + 360) % 360 });
+      const oldVp = page.getViewport({
+        scale: 1,
+        rotation: (((base + oldDelta) % 360) + 360) % 360,
+      });
+      const newVp = page.getViewport({
+        scale: 1,
+        rotation: (((base + newDelta) % 360) + 360) % 360,
+      });
       const remap = (x: number, y: number): [number, number] => {
         const [px, py] = oldVp.convertToPdfPoint(x, y);
         const [nx, ny] = newVp.convertToViewportPoint(px, py);
@@ -383,13 +392,29 @@
       };
       annotations = annotations.map((a) => {
         if (a.pageKey !== item.key) return a;
-        if (a.type === "highlight") {
+        if (a.type === "highlight" || a.type === "underline" || a.type === "strikethrough") {
           const [x0, y0] = remap(a.rect.x, a.rect.y);
           const [x1, y1] = remap(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
-          return { ...a, rect: { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) } };
+          return {
+            ...a,
+            rect: {
+              x: Math.min(x0, x1),
+              y: Math.min(y0, y1),
+              w: Math.abs(x1 - x0),
+              h: Math.abs(y1 - y0),
+            },
+          };
         }
         if (a.type === "draw") {
-          return { ...a, paths: a.paths.map((s) => s.map((p) => { const [nx, ny] = remap(p.x, p.y); return { x: nx, y: ny }; })) };
+          return {
+            ...a,
+            paths: a.paths.map((s) =>
+              s.map((p) => {
+                const [nx, ny] = remap(p.x, p.y);
+                return { x: nx, y: ny };
+              }),
+            ),
+          };
         }
         const [nx, ny] = remap(a.x, a.y);
         return { ...a, x: nx, y: ny };
@@ -488,9 +513,7 @@
   }
 
   function editNote(id: string, text: string) {
-    annotations = annotations.map((a) =>
-      a.id === id && a.type === "note" ? { ...a, text } : a,
-    );
+    annotations = annotations.map((a) => (a.id === id && a.type === "note" ? { ...a, text } : a));
     dirty = true;
   }
 
@@ -560,7 +583,9 @@
       // writes them back into the live AcroForm.
       const flatten = hasForm && formSaveMode === "flatten";
       if (flatten) {
-        contentEdits.push(...(await formFieldsToContentEdits(formFields, pageList, getDoc, sourceFor)));
+        contentEdits.push(
+          ...(await formFieldsToContentEdits(formFields, pageList, getDoc, sourceFor)),
+        );
       }
       const formValuesOut = hasForm && !flatten ? formFieldsToValues(formFields) : [];
       const pw = encryptOn && password.trim() ? password : undefined;
@@ -636,16 +661,30 @@
 
   <div class="no-print flex flex-wrap items-center gap-2 px-1">
     <div class="min-w-[280px] flex-1 overflow-x-auto scrollbar-none">
-      <Toolbar onOpen={handleOpen} onSearch={toggleSearch} onOcr={() => (ocrOpen = !ocrOpen)} onTool={setTool} activeTool={tool} hasDoc={!!doc} />
+      <Toolbar
+        onOpen={handleOpen}
+        onSearch={toggleSearch}
+        onOcr={() => (ocrOpen = !ocrOpen)}
+        onSig={() => (sigOpen = !sigOpen)}
+        onTool={setTool}
+        activeTool={tool}
+        hasDoc={!!doc}
+      />
     </div>
     <div class="flex flex-wrap items-center gap-2">
       {#if doc}
         {#if hasForm}
           <div class="form-toggle glass" title="How form fields are written when you save">
-            <button class:on={formSaveMode === "editable"} onclick={() => (formSaveMode = "editable")}>
+            <button
+              class:on={formSaveMode === "editable"}
+              onclick={() => (formSaveMode = "editable")}
+            >
               Editable
             </button>
-            <button class:on={formSaveMode === "flatten"} onclick={() => (formSaveMode = "flatten")}>
+            <button
+              class:on={formSaveMode === "flatten"}
+              onclick={() => (formSaveMode = "flatten")}
+            >
               Flatten
             </button>
           </div>
@@ -655,7 +694,9 @@
             class="lock-btn glass glass-hover"
             class:on={encryptOn}
             onclick={() => (encryptOn = !encryptOn)}
-            title={encryptOn ? "Encryption on — saved file needs a password (AES-128)" : "Encrypt saved file with a password (AES-128)"}
+            title={encryptOn
+              ? "Encryption on — saved file needs a password (AES-128)"
+              : "Encrypt saved file with a password (AES-128)"}
             aria-label="Toggle encryption"
           >
             {encryptOn ? "🔒" : "🔓"}
@@ -678,7 +719,12 @@
                   bind:value={password}
                 />
               {/if}
-              <button class="pw-eye" onclick={() => (showPassword = !showPassword)} title={showPassword ? "Hide" : "Show"} aria-label="Toggle password visibility">
+              <button
+                class="pw-eye"
+                onclick={() => (showPassword = !showPassword)}
+                title={showPassword ? "Hide" : "Show"}
+                aria-label="Toggle password visibility"
+              >
                 {showPassword ? "🙈" : "👁"}
               </button>
             </div>
@@ -689,7 +735,9 @@
             class="save-btn save-btn-main"
             onclick={() => handleSave("save")}
             disabled={saving}
-            title={dirty ? "Unsaved changes — Save (Ctrl+S)" : "Save, overwriting the open file (Ctrl+S)"}
+            title={dirty
+              ? "Unsaved changes — Save (Ctrl+S)"
+              : "Save, overwriting the open file (Ctrl+S)"}
           >
             {#if dirty && !saving}<span class="dirty-dot"></span>{/if}
             {saving ? "Saving…" : "Save"}
@@ -710,7 +758,13 @@
           title="Print — opens your system print dialog (Ctrl+P)"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M7 8V4h10v4M7 18H5a2 2 0 01-2-2v-3a2 2 0 012-2h14a2 2 0 012 2v3a2 2 0 01-2 2h-2M7 14h10v6H7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+            <path
+              d="M7 8V4h10v4M7 18H5a2 2 0 01-2-2v-3a2 2 0 012-2h14a2 2 0 012 2v3a2 2 0 01-2 2h-2M7 14h10v6H7z"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+            />
           </svg>
           Print
         </button>
@@ -726,10 +780,16 @@
             <span class="text-[10px] opacity-70">▾</span>
           </button>
           {#if exportOpen}
-            <button class="export-backdrop" aria-label="Close export menu" onclick={() => (exportOpen = false)}></button>
+            <button
+              class="export-backdrop"
+              aria-label="Close export menu"
+              onclick={() => (exportOpen = false)}
+            ></button>
             <div class="export-menu glass">
               {#each EXPORT_FORMATS as f}
-                <button class="export-item glass-hover" onclick={() => doExport(f.id)}>{f.label}</button>
+                <button class="export-item glass-hover" onclick={() => doExport(f.id)}
+                  >{f.label}</button
+                >
               {/each}
             </div>
           {/if}
@@ -752,7 +812,10 @@
         </button>
       {/if}
       {#if fileName}
-        <div class="glass max-w-[280px] truncate rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]" title={fileName}>
+        <div
+          class="glass max-w-[280px] truncate rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          title={fileName}
+        >
           {fileName}
         </div>
       {/if}
@@ -762,7 +825,9 @@
       >
         <span
           class="h-2 w-2 rounded-full"
-          style="background: {engineOk ? '#46d39a' : '#f0a73a'}; box-shadow: 0 0 8px {engineOk ? '#46d39a' : '#f0a73a'};"
+          style="background: {engineOk ? '#46d39a' : '#f0a73a'}; box-shadow: 0 0 8px {engineOk
+            ? '#46d39a'
+            : '#f0a73a'};"
         ></span>
         <span class="text-[var(--color-ink-dim)]">{engineLabel}</span>
       </div>
@@ -771,9 +836,19 @@
 
   <main class="app-main flex min-h-0 flex-1 gap-2.5">
     <div class="no-print contents">
-      <ThumbRail {getDoc} {pageList} onSelect={scrollToKey} onDelete={deletePage} onMove={movePage} onRotate={rotatePage} />
+      <ThumbRail
+        {getDoc}
+        {pageList}
+        onSelect={scrollToKey}
+        onDelete={deletePage}
+        onMove={movePage}
+        onRotate={rotatePage}
+      />
     </div>
-    <section bind:this={mainEl} class="viewer-shell glass relative min-h-0 flex-1 overflow-hidden rounded-2xl">
+    <section
+      bind:this={mainEl}
+      class="viewer-shell glass relative min-h-0 flex-1 overflow-hidden rounded-2xl"
+    >
       {#if doc}
         <PdfViewer
           {getDoc}
@@ -801,7 +876,15 @@
         {#if tool !== "none"}
           <div class="optbar glass no-print">
             <span class="text-[11px] uppercase tracking-wide text-[var(--color-ink-dim)]">
-              {tool === "highlight" ? "Highlight" : tool === "draw" ? "Draw" : tool === "text" ? "Add text" : tool === "edittext" ? "Edit text — click a line" : "Note"}
+              {tool === "highlight"
+                ? "Highlight"
+                : tool === "draw"
+                  ? "Draw"
+                  : tool === "text"
+                    ? "Add text"
+                    : tool === "edittext"
+                      ? "Edit text — click a line"
+                      : "Note"}
             </span>
             <div class="mx-1 h-5 w-px bg-white/10"></div>
             {#each ANNOTATION_COLORS as c}
@@ -840,7 +923,9 @@
               />
             {/if}
             <div class="mx-1 h-5 w-px bg-white/10"></div>
-            <button class="zbtn glass-hover" onclick={() => (tool = "none")} title="Done">Done</button>
+            <button class="zbtn glass-hover" onclick={() => (tool = "none")} title="Done"
+              >Done</button
+            >
           </div>
         {/if}
 
@@ -848,7 +933,11 @@
         {#if searchOpen}
           <div class="findbar glass no-print">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" class="opacity-60">
-              <path d="M10 4a6 6 0 104 10l5 5 1-1-5-5A6 6 0 0010 4z" stroke="currentColor" stroke-width="1.6" />
+              <path
+                d="M10 4a6 6 0 104 10l5 5 1-1-5-5A6 6 0 0010 4z"
+                stroke="currentColor"
+                stroke-width="1.6"
+              />
             </svg>
             <input
               bind:this={searchInput}
@@ -867,17 +956,44 @@
             <span class="findcount">
               {query.trim() ? (matchCount ? `${activeIndex + 1}/${matchCount}` : "0/0") : ""}
             </span>
-            <button class="zbtn glass-hover" onclick={() => stepMatch(-1)} title="Previous (Shift+Enter)" aria-label="Previous match">‹</button>
-            <button class="zbtn glass-hover" onclick={() => stepMatch(1)} title="Next (Enter)" aria-label="Next match">›</button>
-            <button class="zbtn glass-hover" onclick={closeSearch} title="Close (Esc)" aria-label="Close search">✕</button>
+            <button
+              class="zbtn glass-hover"
+              onclick={() => stepMatch(-1)}
+              title="Previous (Shift+Enter)"
+              aria-label="Previous match">‹</button
+            >
+            <button
+              class="zbtn glass-hover"
+              onclick={() => stepMatch(1)}
+              title="Next (Enter)"
+              aria-label="Next match">›</button
+            >
+            <button
+              class="zbtn glass-hover"
+              onclick={closeSearch}
+              title="Close (Esc)"
+              aria-label="Close search">✕</button
+            >
           </div>
         {/if}
 
         <!-- Floating zoom controls -->
         <div class="zoombar glass no-print">
-          <button class="zbtn glass-hover" onclick={() => zoom(-0.15)} title="Zoom out" aria-label="Zoom out">−</button>
-          <button class="zlabel" onclick={() => (scale = 1.2)} title="Reset zoom">{Math.round(scale * 100)}%</button>
-          <button class="zbtn glass-hover" onclick={() => zoom(0.15)} title="Zoom in" aria-label="Zoom in">+</button>
+          <button
+            class="zbtn glass-hover"
+            onclick={() => zoom(-0.15)}
+            title="Zoom out"
+            aria-label="Zoom out">−</button
+          >
+          <button class="zlabel" onclick={() => (scale = 1.2)} title="Reset zoom"
+            >{Math.round(scale * 100)}%</button
+          >
+          <button
+            class="zbtn glass-hover"
+            onclick={() => zoom(0.15)}
+            title="Zoom in"
+            aria-label="Zoom in">+</button
+          >
           <div class="mx-1 h-5 w-px bg-white/10"></div>
           <button class="zbtn wide glass-hover" onclick={fitWidth} title="Fit width">Fit</button>
         </div>
@@ -896,9 +1012,9 @@
     {#if doc && commentsOpen}
       <div class="no-print contents">
         <CommentsPanel
-          notes={notes}
+          {notes}
           {selectedId}
-          pageIndexOf={pageIndexOf}
+          {pageIndexOf}
           onSelect={(id) => {
             const note = notes.find((n) => n.id === id);
             selectAnnotation(id);
@@ -910,7 +1026,7 @@
         />
       </div>
     {/if}
-      {#if doc && ocrOpen && filePath}
+    {#if doc && ocrOpen && filePath}
       <div class="no-print contents">
         <OcrPanel
           {filePath}
@@ -922,11 +1038,22 @@
         />
       </div>
     {/if}
+    {#if doc && sigOpen && filePath}
+      <div class="no-print contents">
+        <SignaturePanel
+          {filePath}
+          sourcePassword={openedPassword ?? undefined}
+          onClose={() => (sigOpen = false)}
+        />
+      </div>
+    {/if}
   </main>
 
   <footer class="flex items-center justify-between px-2 text-[11px] text-[var(--color-ink-dim)]">
     <span>
-      limitlessPDF v{version}{#if loadError} · <span class="text-[#f0a73a]">{loadError}</span>{/if}{#if saveMsg} · <span class="text-[var(--color-accent)]">{saveMsg}</span>{/if}
+      limitlessPDF v{version}{#if loadError}
+        · <span class="text-[#f0a73a]">{loadError}</span>{/if}{#if saveMsg}
+        · <span class="text-[var(--color-accent)]">{saveMsg}</span>{/if}
     </span>
     <span>{doc ? `${doc.numPages} pages` : "M1 viewer — Tauri · Svelte · pdf.js"}</span>
   </footer>
@@ -943,7 +1070,9 @@
         <div class="text-lg">🔒</div>
         <div class="pw-modal-title">This PDF is password-protected</div>
         <div class="pw-modal-sub">
-          {pwPrompt.incorrect ? "Incorrect password — try again." : "Enter the password to open it."}
+          {pwPrompt.incorrect
+            ? "Incorrect password — try again."
+            : "Enter the password to open it."}
         </div>
         <input
           id="pw-entry"
@@ -954,7 +1083,9 @@
           autocomplete="off"
         />
         <div class="pw-modal-actions">
-          <button type="button" class="pw-modal-btn" onclick={() => resolvePassword(null)}>Cancel</button>
+          <button type="button" class="pw-modal-btn" onclick={() => resolvePassword(null)}
+            >Cancel</button
+          >
           <button type="submit" class="pw-modal-btn primary" disabled={!pwEntry}>Open</button>
         </div>
       </form>
@@ -1087,7 +1218,11 @@
     position: relative;
   }
   .export-on {
-    background: linear-gradient(135deg, rgba(110, 168, 255, 0.28), rgba(167, 139, 250, 0.28)) !important;
+    background: linear-gradient(
+      135deg,
+      rgba(110, 168, 255, 0.28),
+      rgba(167, 139, 250, 0.28)
+    ) !important;
   }
   .export-backdrop {
     position: fixed;
@@ -1276,8 +1411,13 @@
     }
   }
 
-  .scrollbar-none::-webkit-scrollbar { display: none; }
-  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 
   /* Print: show only the page stack, flowed one page per sheet. The chrome is
      marked .no-print; the layout wrappers are neutralized so pages can flow. */

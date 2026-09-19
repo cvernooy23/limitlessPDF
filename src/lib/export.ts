@@ -53,7 +53,13 @@ async function pageLines(doc: PdfDocument, pageNum: number): Promise<Line[]> {
     .map((it) => {
       const t = it.transform as number[]; // [a, b, c, d, e(x), f(y)]
       const h = Math.hypot(t[1] ?? 0, t[3] ?? 0) || it.height || 10;
-      return { str: it.str as string, x: t[4] as number, y: t[5] as number, w: (it.width as number) || 0, h };
+      return {
+        str: it.str as string,
+        x: t[4] as number,
+        y: t[5] as number,
+        w: (it.width as number) || 0,
+        h,
+      };
     });
   page.cleanup();
 

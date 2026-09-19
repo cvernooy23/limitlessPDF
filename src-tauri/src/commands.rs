@@ -106,7 +106,6 @@ pub fn engine_status(app: tauri::AppHandle) -> engine::EngineStatus {
     engine::status_in(&dirs)
 }
 
-
 // ── OCR commands ──────────────────────────────────────────────────────────
 
 /// Check whether Tesseract is installed and what languages are available.
@@ -143,4 +142,16 @@ pub fn run_ocr(
         source_password,
     };
     crate::ocr::run_ocr(&req)
+}
+
+// ── Signature commands ───────────────────────────────────────────────────
+
+/// Extract digital signature information from a PDF. Returns details about
+/// each signature field: signer name, date, reason, and byte-coverage status.
+#[tauri::command]
+pub fn check_signatures(
+    path: String,
+    source_password: Option<String>,
+) -> Result<Vec<crate::signature::SignatureInfo>, String> {
+    crate::signature::extract_signatures(&path, source_password.as_deref())
 }

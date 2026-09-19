@@ -18,9 +18,26 @@ export type PdfPage = pdfjsLib.PDFPageProxy;
 /** Annotation payload in PDF user space (origin bottom-left), addressed by
  *  output-page index, sent to Rust. */
 export type SavePayload =
-  | { type: "highlight"; out_index: number; color: string; rect: { x0: number; y0: number; x1: number; y1: number } }
+  | {
+      type: "highlight";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+    }
   | { type: "draw"; out_index: number; color: string; width: number; paths: number[][] }
-  | { type: "note"; out_index: number; color: string; x: number; y: number; text: string };
+  | { type: "note"; out_index: number; color: string; x: number; y: number; text: string }
+  | {
+      type: "underline";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+    }
+  | {
+      type: "strikethrough";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+    };
 
 export interface LoadedPdf {
   doc: PdfDocument;
@@ -32,7 +49,10 @@ export interface LoadedPdf {
  * On an encrypted file with a missing/incorrect password, the returned promise
  * rejects with a pdf.js PasswordException — use `passwordError()` to detect it.
  */
-export async function loadPdf(data: ArrayBuffer | Uint8Array, password?: string): Promise<LoadedPdf> {
+export async function loadPdf(
+  data: ArrayBuffer | Uint8Array,
+  password?: string,
+): Promise<LoadedPdf> {
   // pdf.js takes ownership of the buffer, so hand it a fresh Uint8Array.
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const task = pdfjsLib.getDocument({ data: bytes, password });
@@ -82,6 +102,7 @@ export async function renderPageToCanvas(
   // painting their baked appearance here too would double-render filled fields.
   await page.render({
     canvasContext: ctx,
+    canvas,
     viewport,
     annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS,
   }).promise;
@@ -120,8 +141,25 @@ export interface TextBox {
 
 /** Content-edit payload sent to Rust/PDFium, addressed by source + page. */
 export type ContentEditPayload =
-  | { kind: "text"; source: number; srcPage: number; x: number; y: number; size: number; color: string; text: string }
-  | { kind: "editText"; source: number; srcPage: number; x: number; y: number; origText: string; text: string };
+  | {
+      kind: "text";
+      source: number;
+      srcPage: number;
+      x: number;
+      y: number;
+      size: number;
+      color: string;
+      text: string;
+    }
+  | {
+      kind: "editText";
+      source: number;
+      srcPage: number;
+      x: number;
+      y: number;
+      origText: string;
+      text: string;
+    };
 
 /** An interactive AcroForm field discovered in the document. Geometry is in
  *  scale-1 viewport space (top-left origin), like annotations/text boxes, so the
@@ -193,8 +231,10 @@ export async function detectFormFields(
         continue; // Sig or unknown
       }
 
-      // PDF rect -> viewport rect (already rotation-aware), then normalize.
-      const [vx1, vy1, vx2, vy2] = vp.convertToViewportRectangle(a.rect);
+      // PDF rect -> viewport rect. In pdfjs v6 convertToViewportRectangle
+      // was removed; use convertToViewportPoint for each corner instead.
+      const [vx1, vy1] = vp.convertToViewportPoint(a.rect[0], a.rect[1]);
+      const [vx2, vy2] = vp.convertToViewportPoint(a.rect[2], a.rect[3]);
       const x = Math.min(vx1, vx2);
       const y = Math.min(vy1, vy2);
       const w = Math.abs(vx2 - vx1);
@@ -420,6 +460,10 @@ export async function annotationsToPayload(
         stroke.flatMap((p) => v!.convertToPdfPoint(p.x, p.y) as number[]),
       );
       out.push({ type: "draw", out_index: idx, color: a.color, width: a.width, paths });
+    } else if (a.type === "underline" || a.type === "strikethrough") {
+      const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
+      const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
+      out.push({ type: a.type, out_index: idx, color: a.color, rect: { x0, y0, x1, y1 } });
     } else {
       const [x, y] = v.convertToPdfPoint(a.x, a.y);
       out.push({ type: "note", out_index: idx, color: a.color, x, y, text: a.text });

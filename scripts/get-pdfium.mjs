@@ -71,12 +71,12 @@ async function main() {
     console.log(`✓ Installed ${target.out} → ${libDest}`);
   }
 
-  console.log("  Dev: run `npm run app:dev` — the badge should read \"PDFium ready\".");
+  console.log('  Dev: run `npm run app:dev` — the badge should read "PDFium ready".');
   console.log("  Build: `npm run app:build` bundles it into the installer automatically.");
 }
 
 main().catch((err) => {
   console.error(`✗ ${err.message}`);
-  console.error("  You can install PDFium manually — see README \"PDFium binaries\".");
+  console.error('  You can install PDFium manually — see README "PDFium binaries".');
   process.exit(1);
 });

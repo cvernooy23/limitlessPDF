@@ -94,7 +94,10 @@
         >
           <div class="page-frame">
             {#if d}
-              <canvas class="thumb-canvas" use:pageRender={{ doc: d, page: pg.srcPage, scale: 0.22, rotation: pg.rotation }}></canvas>
+              <canvas
+                class="thumb-canvas"
+                use:pageRender={{ doc: d, page: pg.srcPage, scale: 0.22, rotation: pg.rotation }}
+              ></canvas>
             {:else}
               <div class="page-skeleton"></div>
             {/if}
@@ -104,22 +107,31 @@
                 title="Rotate left"
                 aria-label="Rotate left"
                 onpointerdown={(e) => e.stopPropagation()}
-                onclick={(e) => { e.stopPropagation(); onRotate?.(pg.key, -1); }}
-              >↺</button>
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onRotate?.(pg.key, -1);
+                }}>↺</button
+              >
               <button
                 class="act"
                 title="Rotate right"
                 aria-label="Rotate right"
                 onpointerdown={(e) => e.stopPropagation()}
-                onclick={(e) => { e.stopPropagation(); onRotate?.(pg.key, 1); }}
-              >↻</button>
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onRotate?.(pg.key, 1);
+                }}>↻</button
+              >
               <button
                 class="act act-del"
                 title="Delete page"
                 aria-label="Delete page"
                 onpointerdown={(e) => e.stopPropagation()}
-                onclick={(e) => { e.stopPropagation(); onDelete?.(pg.key); }}
-              >✕</button>
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onDelete?.(pg.key);
+                }}>✕</button
+              >
             </div>
           </div>
           <span class="text-[11px] text-[var(--color-ink-dim)]">{i + 1}</span>

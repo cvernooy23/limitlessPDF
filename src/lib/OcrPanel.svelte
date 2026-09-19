@@ -88,9 +88,7 @@
     }
   }
 
-  const totalWords = $derived(
-    results ? results.reduce((sum, r) => sum + r.wordCount, 0) : 0,
-  );
+  const totalWords = $derived(results ? results.reduce((sum, r) => sum + r.wordCount, 0) : 0);
 </script>
 
 <div class="ocr-panel glass">
@@ -117,7 +115,9 @@
   {:else}
     <div class="ocr-body">
       <div class="ocr-info">
-        Found <strong>{scannedPages.length}</strong> scanned page{scannedPages.length === 1 ? "" : "s"}.
+        Found <strong>{scannedPages.length}</strong> scanned page{scannedPages.length === 1
+          ? ""
+          : "s"}.
       </div>
 
       <div class="ocr-pages">
@@ -159,11 +159,7 @@
         </label>
       </div>
 
-      <button
-        class="ocr-run"
-        onclick={startOcr}
-        disabled={running || selectedPages.size === 0}
-      >
+      <button class="ocr-run" onclick={startOcr} disabled={running || selectedPages.size === 0}>
         {#if running}
           Running OCR…
         {:else}
@@ -178,8 +174,8 @@
       {#if results}
         <div class="ocr-results">
           <div class="ocr-results-head">
-            Done — {totalWords} word{totalWords === 1 ? "" : "s"} recognized.
-            Reload the file to see searchable text.
+            Done — {totalWords} word{totalWords === 1 ? "" : "s"} recognized. Reload the file to see searchable
+            text.
           </div>
           {#each results as r}
             <div class="ocr-result-row">

@@ -3,7 +3,9 @@
 </script>
 
 <div class="grid h-full place-items-center">
-  <div class="glass sheen flex max-w-md flex-col items-center gap-5 rounded-3xl px-12 py-14 text-center">
+  <div
+    class="glass sheen flex max-w-md flex-col items-center gap-5 rounded-3xl px-12 py-14 text-center"
+  >
     <div
       class="grid h-20 w-20 place-items-center rounded-2xl text-2xl font-bold"
       style="background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: #0b0d14;"
@@ -13,7 +15,8 @@
     <div class="space-y-1">
       <h1 class="text-xl font-semibold">Open a PDF to begin</h1>
       <p class="text-sm text-[var(--color-ink-dim)]">
-        Drag a file here, or browse to get started. View, annotate, fill forms, and export — all in one app.
+        Drag a file here, or browse to get started. View, annotate, fill forms, and export — all in
+        one app.
       </p>
     </div>
     <button class="cta glass-hover" onclick={() => onOpen?.()}>Browse files</button>

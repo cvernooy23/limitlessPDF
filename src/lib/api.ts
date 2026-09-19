@@ -117,7 +117,6 @@ export async function savePdf(
   });
 }
 
-
 // ── OCR ───────────────────────────────────────────────────────────────────
 
 export interface OcrStatus {
@@ -139,10 +138,7 @@ export async function checkOcrAvailable(): Promise<OcrStatus> {
 }
 
 /** Detect pages that are likely scanned images (little/no extractable text). */
-export async function detectScannedPages(
-  path: string,
-  sourcePassword?: string,
-): Promise<number[]> {
+export async function detectScannedPages(path: string, sourcePassword?: string): Promise<number[]> {
   return invoke<number[]>("detect_scanned_pages", {
     path,
     sourcePassword: sourcePassword ?? null,
@@ -162,6 +158,30 @@ export async function runOcr(
     pages,
     language: language ?? null,
     dpi: dpi ?? null,
+    sourcePassword: sourcePassword ?? null,
+  });
+}
+
+// ── Signatures ───────────────────────────────────────────────────────────
+
+export interface SignatureInfo {
+  fieldName: string;
+  signerName: string | null;
+  signingTime: string | null;
+  reason: string | null;
+  location: string | null;
+  subFilter: string | null;
+  coversWholeDoc: boolean;
+  status: string;
+}
+
+/** Extract digital signature information from a PDF. */
+export async function checkSignatures(
+  path: string,
+  sourcePassword?: string,
+): Promise<SignatureInfo[]> {
+  return invoke<SignatureInfo[]>("check_signatures", {
+    path,
     sourcePassword: sourcePassword ?? null,
   });
 }
