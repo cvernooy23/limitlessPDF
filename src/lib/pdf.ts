@@ -37,6 +37,28 @@ export type SavePayload =
       out_index: number;
       color: string;
       rect: { x0: number; y0: number; x1: number; y1: number };
+    }
+  | {
+      type: "rect";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+      borderWidth: number;
+    }
+  | {
+      type: "circle";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+      borderWidth: number;
+    }
+  | {
+      type: "arrow";
+      out_index: number;
+      color: string;
+      start: { x: number; y: number };
+      end: { x: number; y: number };
+      width: number;
     };
 
 export interface LoadedPdf {
@@ -464,6 +486,27 @@ export async function annotationsToPayload(
       const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
       const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
       out.push({ type: a.type, out_index: idx, color: a.color, rect: { x0, y0, x1, y1 } });
+    } else if (a.type === "rect" || a.type === "circle") {
+      const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
+      const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
+      out.push({
+        type: a.type,
+        out_index: idx,
+        color: a.color,
+        rect: { x0, y0, x1, y1 },
+        borderWidth: a.borderWidth,
+      });
+    } else if (a.type === "arrow") {
+      const [sx, sy] = v.convertToPdfPoint(a.start.x, a.start.y);
+      const [ex, ey] = v.convertToPdfPoint(a.end.x, a.end.y);
+      out.push({
+        type: "arrow",
+        out_index: idx,
+        color: a.color,
+        start: { x: sx, y: sy },
+        end: { x: ex, y: ey },
+        width: a.width,
+      });
     } else {
       const [x, y] = v.convertToPdfPoint(a.x, a.y);
       out.push({ type: "note", out_index: idx, color: a.color, x, y, text: a.text });

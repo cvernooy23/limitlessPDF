@@ -9,6 +9,9 @@ import {
   type StrikethroughAnnotation,
   type DrawAnnotation,
   type NoteAnnotation,
+  type RectShapeAnnotation,
+  type CircleAnnotation,
+  type ArrowAnnotation,
 } from "./annotations";
 
 // ---------------------------------------------------------------------------
@@ -165,6 +168,97 @@ describe("hitTest", () => {
         paths: [[{ x: 50, y: 50 }]],
       };
       expect(hitTest([dot], 50, 50, 1)).toBe("d2");
+    });
+  });
+
+  // Rect shape
+  describe("rect shape", () => {
+    const rs: RectShapeAnnotation = {
+      ...base,
+      id: "r1",
+      type: "rect",
+      rect: { x: 20, y: 20, w: 100, h: 80 },
+      borderWidth: 2,
+    };
+
+    it("hits near the left edge", () => {
+      expect(hitTest([rs], 20, 60, 1)).toBe("r1");
+    });
+
+    it("hits near the top edge", () => {
+      expect(hitTest([rs], 70, 20, 1)).toBe("r1");
+    });
+
+    it("hits near the right edge", () => {
+      expect(hitTest([rs], 120, 60, 1)).toBe("r1");
+    });
+
+    it("hits near the bottom edge", () => {
+      expect(hitTest([rs], 70, 100, 1)).toBe("r1");
+    });
+
+    it("misses the interior (stroke-only)", () => {
+      expect(hitTest([rs], 70, 60, 1)).toBeNull();
+    });
+
+    it("misses far outside", () => {
+      expect(hitTest([rs], 200, 200, 1)).toBeNull();
+    });
+  });
+
+  // Circle
+  describe("circle", () => {
+    const ci: CircleAnnotation = {
+      ...base,
+      id: "c1",
+      type: "circle",
+      rect: { x: 50, y: 50, w: 100, h: 100 },
+      borderWidth: 2,
+    };
+
+    it("hits on the ellipse border (right)", () => {
+      // Center (100,100), rx=50, ry=50. Point (150,100) is on the border.
+      expect(hitTest([ci], 150, 100, 1)).toBe("c1");
+    });
+
+    it("hits on the ellipse border (top)", () => {
+      expect(hitTest([ci], 100, 50, 1)).toBe("c1");
+    });
+
+    it("misses the interior", () => {
+      expect(hitTest([ci], 100, 100, 1)).toBeNull();
+    });
+
+    it("misses far outside", () => {
+      expect(hitTest([ci], 300, 300, 1)).toBeNull();
+    });
+  });
+
+  // Arrow
+  describe("arrow", () => {
+    const ar: ArrowAnnotation = {
+      ...base,
+      id: "a1",
+      type: "arrow",
+      start: { x: 10, y: 10 },
+      end: { x: 110, y: 10 },
+      width: 2,
+    };
+
+    it("hits near the line segment", () => {
+      expect(hitTest([ar], 50, 10, 1)).toBe("a1");
+    });
+
+    it("misses far from the line", () => {
+      expect(hitTest([ar], 50, 100, 1)).toBeNull();
+    });
+
+    it("hits near the start point", () => {
+      expect(hitTest([ar], 10, 10, 1)).toBe("a1");
+    });
+
+    it("hits near the end point", () => {
+      expect(hitTest([ar], 110, 10, 1)).toBe("a1");
     });
   });
 

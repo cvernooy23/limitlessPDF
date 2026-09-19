@@ -29,6 +29,12 @@ pub struct RectPdf {
 }
 
 #[derive(Deserialize)]
+pub struct PointPdf {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SaveAnnotation {
     Highlight {
@@ -60,6 +66,27 @@ pub enum SaveAnnotation {
         color: String,
         rect: RectPdf,
     },
+    Rect {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+        #[serde(rename = "borderWidth")]
+        border_width: f32,
+    },
+    Circle {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+        #[serde(rename = "borderWidth")]
+        border_width: f32,
+    },
+    Arrow {
+        out_index: u32,
+        color: String,
+        start: PointPdf,
+        end: PointPdf,
+        width: f32,
+    },
 }
 
 impl SaveAnnotation {
@@ -70,7 +97,10 @@ impl SaveAnnotation {
             | SaveAnnotation::Draw { out_index, .. }
             | SaveAnnotation::Note { out_index, .. }
             | SaveAnnotation::Underline { out_index, .. }
-            | SaveAnnotation::Strikethrough { out_index, .. } => *out_index,
+            | SaveAnnotation::Strikethrough { out_index, .. }
+            | SaveAnnotation::Rect { out_index, .. }
+            | SaveAnnotation::Circle { out_index, .. }
+            | SaveAnnotation::Arrow { out_index, .. } => *out_index,
         }) as usize
     }
 }
@@ -491,6 +521,162 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
             Ok(doc.add_object(Object::Dictionary(d)))
         }
 
+        SaveAnnotation::Rect {
+            color,
+            rect,
+            border_width,
+            ..
+        } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+            let (w, h) = (x1 - x0, y1 - y0);
+            let bw = *border_width;
+
+            // Appearance: stroked rectangle (no fill).
+            let content =
+                format!("{r:.4} {g:.4} {b:.4} RG\n{bw:.2} w\n{x0:.2} {y0:.2} {w:.2} {h:.2} re S\n");
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0 - bw, y0 - bw, x1 + bw, y1 + bw));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Square", x0, y0, x1, y1, r, g, b);
+            d.set("IC", Object::Array(vec![])); // no interior color
+            let mut bs = Dictionary::new();
+            bs.set("W", Object::Real(bw));
+            bs.set("S", Object::Name(b"S".to_vec()));
+            d.set("BS", Object::Dictionary(bs));
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
+        SaveAnnotation::Circle {
+            color,
+            rect,
+            border_width,
+            ..
+        } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+            let bw = *border_width;
+            let cx = (x0 + x1) / 2.0;
+            let cy = (y0 + y1) / 2.0;
+            let rx = (x1 - x0) / 2.0;
+            let ry = (y1 - y0) / 2.0;
+
+            // Approximate ellipse with 4 cubic Bezier curves (kappa ≈ 0.5523).
+            let k = 0.5523;
+            let kx = rx * k as f32;
+            let ky = ry * k as f32;
+            let content = format!(
+                "{r:.4} {g:.4} {b:.4} RG\n{bw:.2} w\n\
+                 {:.2} {cy:.2} m\n\
+                 {:.2} {:.2} {:.2} {:.2} {cx:.2} {:.2} c\n\
+                 {:.2} {:.2} {:.2} {:.2} {:.2} {cy:.2} c\n\
+                 {:.2} {:.2} {:.2} {:.2} {cx:.2} {:.2} c\n\
+                 {:.2} {:.2} {:.2} {:.2} {:.2} {cy:.2} c\n\
+                 S\n",
+                cx + rx,
+                cx + rx,
+                cy + ky,
+                cx + kx,
+                cy + ry,
+                cy + ry,
+                cx - kx,
+                cy + ry,
+                cx - rx,
+                cy + ky,
+                cx - rx,
+                cx - rx,
+                cy - ky,
+                cx - kx,
+                cy - ry,
+                cy - ry,
+                cx + kx,
+                cy - ry,
+                cx + rx,
+                cy - ky,
+                cx + rx,
+            );
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0 - bw, y0 - bw, x1 + bw, y1 + bw));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Circle", x0, y0, x1, y1, r, g, b);
+            d.set("IC", Object::Array(vec![]));
+            let mut bs = Dictionary::new();
+            bs.set("W", Object::Real(bw));
+            bs.set("S", Object::Name(b"S".to_vec()));
+            d.set("BS", Object::Dictionary(bs));
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
+        SaveAnnotation::Arrow {
+            color,
+            start,
+            end,
+            width,
+            ..
+        } => {
+            let (r, g, b) = parse_color(color);
+            let bw = *width;
+            let (sx, sy) = (start.x, start.y);
+            let (ex, ey) = (end.x, end.y);
+            let (x0, y0, x1, y1) = normalize(sx, sy, ex, ey);
+            let pad = bw + 12.0;
+
+            // Appearance: line with arrowhead at the end point.
+            let dx = ex - sx;
+            let dy = ey - sy;
+            let len = (dx * dx + dy * dy).sqrt();
+            let mut content = format!(
+                "{r:.4} {g:.4} {b:.4} RG\n{r:.4} {g:.4} {b:.4} rg\n{bw:.2} w\n1 J\n\
+                 {sx:.2} {sy:.2} m {ex:.2} {ey:.2} l S\n"
+            );
+            if len > 0.01 {
+                let ux = dx / len;
+                let uy = dy / len;
+                let head_len = (12.0_f32).min(len * 0.4);
+                let head_w = head_len * 0.5;
+                let bx = ex - ux * head_len;
+                let by = ey - uy * head_len;
+                content.push_str(&format!(
+                    "{:.2} {:.2} m {ex:.2} {ey:.2} l {:.2} {:.2} l f\n",
+                    bx - uy * head_w,
+                    by + ux * head_w,
+                    bx + uy * head_w,
+                    by - ux * head_w,
+                ));
+            }
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0 - pad, y0 - pad, x1 + pad, y1 + pad));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Line", x0 - pad, y0 - pad, x1 + pad, y1 + pad, r, g, b);
+            d.set(
+                "L",
+                Object::Array(vec![sx.into(), sy.into(), ex.into(), ey.into()]),
+            );
+            d.set(
+                "LE",
+                Object::Array(vec![
+                    Object::Name(b"None".to_vec()),
+                    Object::Name(b"OpenArrow".to_vec()),
+                ]),
+            );
+            let mut bs = Dictionary::new();
+            bs.set("W", Object::Real(bw));
+            d.set("BS", Object::Dictionary(bs));
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
         SaveAnnotation::Note {
             color, x, y, text, ..
         } => {
@@ -850,6 +1036,66 @@ mod tests {
     }
 
     #[test]
+    fn build_rect_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Rect {
+            out_index: 0,
+            color: "#ff0000".to_string(),
+            rect: RectPdf {
+                x0: 50.0,
+                y0: 400.0,
+                x1: 200.0,
+                y1: 500.0,
+            },
+            border_width: 2.0,
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Square");
+        assert!(d.get(b"BS").is_ok());
+        assert!(d.get(b"AP").is_ok());
+    }
+
+    #[test]
+    fn build_circle_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Circle {
+            out_index: 0,
+            color: "#00ff00".to_string(),
+            rect: RectPdf {
+                x0: 100.0,
+                y0: 300.0,
+                x1: 250.0,
+                y1: 450.0,
+            },
+            border_width: 1.5,
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Circle");
+        assert!(d.get(b"BS").is_ok());
+        assert!(d.get(b"AP").is_ok());
+    }
+
+    #[test]
+    fn build_arrow_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Arrow {
+            out_index: 0,
+            color: "#0000ff".to_string(),
+            start: PointPdf { x: 100.0, y: 500.0 },
+            end: PointPdf { x: 300.0, y: 400.0 },
+            width: 2.0,
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Line");
+        assert!(d.get(b"L").is_ok());
+        assert!(d.get(b"LE").is_ok());
+        assert!(d.get(b"AP").is_ok());
+    }
+
+    #[test]
     fn out_index_returns_correct_value() {
         let anno = SaveAnnotation::Highlight {
             out_index: 5,
@@ -871,5 +1117,40 @@ mod tests {
             text: "test".to_string(),
         };
         assert_eq!(anno2.out_index(), 3);
+
+        let anno3 = SaveAnnotation::Rect {
+            out_index: 7,
+            color: "#ff0000".to_string(),
+            rect: RectPdf {
+                x0: 0.0,
+                y0: 0.0,
+                x1: 1.0,
+                y1: 1.0,
+            },
+            border_width: 1.0,
+        };
+        assert_eq!(anno3.out_index(), 7);
+
+        let anno4 = SaveAnnotation::Circle {
+            out_index: 2,
+            color: "#ff0000".to_string(),
+            rect: RectPdf {
+                x0: 0.0,
+                y0: 0.0,
+                x1: 1.0,
+                y1: 1.0,
+            },
+            border_width: 1.0,
+        };
+        assert_eq!(anno4.out_index(), 2);
+
+        let anno5 = SaveAnnotation::Arrow {
+            out_index: 9,
+            color: "#ff0000".to_string(),
+            start: PointPdf { x: 0.0, y: 0.0 },
+            end: PointPdf { x: 1.0, y: 1.0 },
+            width: 1.0,
+        };
+        assert_eq!(anno5.out_index(), 9);
     }
 }

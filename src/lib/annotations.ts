@@ -6,7 +6,17 @@
  */
 
 export type Tool =
-  "none" | "highlight" | "underline" | "strikethrough" | "draw" | "note" | "text" | "edittext";
+  | "none"
+  | "highlight"
+  | "underline"
+  | "strikethrough"
+  | "draw"
+  | "note"
+  | "text"
+  | "edittext"
+  | "rect"
+  | "circle"
+  | "arrow";
 
 export interface Point {
   x: number;
@@ -48,12 +58,32 @@ export interface StrikethroughAnnotation extends Base {
   type: "strikethrough";
   rect: Rect;
 }
+export interface RectShapeAnnotation extends Base {
+  type: "rect";
+  rect: Rect;
+  borderWidth: number;
+}
+export interface CircleAnnotation extends Base {
+  type: "circle";
+  /** Bounding box of the ellipse. */
+  rect: Rect;
+  borderWidth: number;
+}
+export interface ArrowAnnotation extends Base {
+  type: "arrow";
+  start: Point;
+  end: Point;
+  width: number;
+}
 export type Annotation =
   | HighlightAnnotation
   | UnderlineAnnotation
   | StrikethroughAnnotation
   | DrawAnnotation
-  | NoteAnnotation;
+  | NoteAnnotation
+  | RectShapeAnnotation
+  | CircleAnnotation
+  | ArrowAnnotation;
 
 export const ANNOTATION_COLORS = ["#ffd23f", "#ff7a90", "#6ee7b7", "#6ea8ff", "#c4a3ff"];
 
@@ -119,6 +149,39 @@ export function hitTest(annos: Annotation[], x: number, y: number, scale: number
           if (d <= tol) return a.id;
         }
       }
+    } else if (a.type === "rect") {
+      const tol = Math.max(a.borderWidth * scale, 6);
+      const x0 = a.rect.x * scale;
+      const y0 = a.rect.y * scale;
+      const x1 = (a.rect.x + a.rect.w) * scale;
+      const y1 = (a.rect.y + a.rect.h) * scale;
+      // Check proximity to any of the four edges.
+      const nearLeft = x >= x0 - tol && x <= x0 + tol && y >= y0 - tol && y <= y1 + tol;
+      const nearRight = x >= x1 - tol && x <= x1 + tol && y >= y0 - tol && y <= y1 + tol;
+      const nearTop = y >= y0 - tol && y <= y0 + tol && x >= x0 - tol && x <= x1 + tol;
+      const nearBottom = y >= y1 - tol && y <= y1 + tol && x >= x0 - tol && x <= x1 + tol;
+      if (nearLeft || nearRight || nearTop || nearBottom) return a.id;
+    } else if (a.type === "circle") {
+      const tol = Math.max(a.borderWidth * scale, 6);
+      const cx = (a.rect.x + a.rect.w / 2) * scale;
+      const cy = (a.rect.y + a.rect.h / 2) * scale;
+      const rx = (a.rect.w / 2) * scale;
+      const ry = (a.rect.h / 2) * scale;
+      if (rx === 0 || ry === 0) continue;
+      // Normalized distance from ellipse center — 1.0 means on the border.
+      const nd = Math.hypot((x - cx) / rx, (y - cy) / ry);
+      if (Math.abs(nd - 1) * Math.min(rx, ry) <= tol) return a.id;
+    } else if (a.type === "arrow") {
+      const tol = Math.max(a.width * scale, 8);
+      const d = segmentDistance(
+        x,
+        y,
+        a.start.x * scale,
+        a.start.y * scale,
+        a.end.x * scale,
+        a.end.y * scale,
+      );
+      if (d <= tol) return a.id;
     }
   }
   return null;

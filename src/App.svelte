@@ -392,7 +392,13 @@
       };
       annotations = annotations.map((a) => {
         if (a.pageKey !== item.key) return a;
-        if (a.type === "highlight" || a.type === "underline" || a.type === "strikethrough") {
+        if (
+          a.type === "highlight" ||
+          a.type === "underline" ||
+          a.type === "strikethrough" ||
+          a.type === "rect" ||
+          a.type === "circle"
+        ) {
           const [x0, y0] = remap(a.rect.x, a.rect.y);
           const [x1, y1] = remap(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
           return {
@@ -415,6 +421,11 @@
               }),
             ),
           };
+        }
+        if (a.type === "arrow") {
+          const [sx, sy] = remap(a.start.x, a.start.y);
+          const [ex, ey] = remap(a.end.x, a.end.y);
+          return { ...a, start: { x: sx, y: sy }, end: { x: ex, y: ey } };
         }
         const [nx, ny] = remap(a.x, a.y);
         return { ...a, x: nx, y: ny };
