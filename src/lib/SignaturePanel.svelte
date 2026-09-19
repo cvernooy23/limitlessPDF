@@ -65,16 +65,14 @@
       <div class="sig-error">{error}</div>
     </div>
   {:else if !signatures || signatures.length === 0}
-    <div class="sig-body dim">
-      This document has no digital signatures.
-    </div>
+    <div class="sig-body dim">This document has no digital signatures.</div>
   {:else}
     <div class="sig-body">
       <div class="sig-count">
         <strong>{signatures.length}</strong> signature{signatures.length === 1 ? "" : "s"} found
       </div>
 
-      {#each signatures as sig, i}
+      {#each signatures as sig}
         <div class="sig-card">
           <div class="sig-status" style="color: {statusColor(sig)}">
             <span class="sig-status-icon">{statusIcon(sig)}</span>
@@ -126,8 +124,8 @@
       {/each}
 
       <div class="sig-note">
-        Byte-range coverage is checked to detect post-sign modifications.
-        Full certificate chain validation is not performed.
+        Byte-range coverage is checked to detect post-sign modifications. Full certificate chain
+        validation is not performed.
       </div>
     </div>
   {/if}

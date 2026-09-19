@@ -41,16 +41,14 @@ pub fn extract_signatures(
     path: &str,
     password: Option<&str>,
 ) -> Result<Vec<SignatureInfo>, String> {
-    let mut doc =
-        Document::load(path).map_err(|e| format!("Couldn't open \"{path}\": {e}"))?;
+    let mut doc = Document::load(path).map_err(|e| format!("Couldn't open \"{path}\": {e}"))?;
     if doc.is_encrypted() {
         let pw = password.unwrap_or("");
         doc.decrypt(pw)
             .map_err(|e| format!("Couldn't decrypt source PDF: {e}"))?;
     }
 
-    let file_bytes = std::fs::read(path)
-        .map_err(|e| format!("Couldn't read \"{path}\": {e}"))?;
+    let file_bytes = std::fs::read(path).map_err(|e| format!("Couldn't read \"{path}\": {e}"))?;
     let file_len = file_bytes.len();
 
     let sig_dicts = collect_sig_dicts(&doc);
@@ -66,9 +64,12 @@ pub fn extract_signatures(
 
 // ── Internals ────────────────────────────────────────────────────────────
 
+/// A signature dictionary: field name + its key-value pairs.
+type SigDict = Vec<(String, Vec<(Vec<u8>, Object)>)>;
+
 /// Walk the AcroForm field tree and collect every /Sig value dictionary,
 /// together with its field name.
-fn collect_sig_dicts(doc: &Document) -> Vec<(String, Vec<(Vec<u8>, Object)>)> {
+fn collect_sig_dicts(doc: &Document) -> SigDict {
     let mut results = Vec::new();
 
     let fields = match acroform_fields(doc) {
@@ -90,7 +91,7 @@ fn collect_sig_fields_recursive(
     doc: &Document,
     obj_id: ObjectId,
     parent_name: String,
-    out: &mut Vec<(String, Vec<(Vec<u8>, Object)>)>,
+    out: &mut SigDict,
     visited: &mut std::collections::HashSet<ObjectId>,
 ) {
     // Guard against circular /Kids references that would overflow the stack.
@@ -104,11 +105,7 @@ fn collect_sig_fields_recursive(
     };
 
     // Build the fully-qualified field name.
-    let local_name = dict
-        .get(b"T")
-        .ok()
-        .and_then(|o| pdf_string(o))
-        .unwrap_or_default();
+    let local_name = dict.get(b"T").ok().and_then(pdf_string).unwrap_or_default();
     let fq_name = if parent_name.is_empty() {
         local_name.clone()
     } else if local_name.is_empty() {
@@ -127,7 +124,7 @@ fn collect_sig_fields_recursive(
 
     if is_sig {
         // The value dictionary /V holds the signature data.
-        if let Some(v_obj) = dict.get(b"V").ok() {
+        if let Ok(v_obj) = dict.get(b"V") {
             let v_dict = resolve_dict(doc, v_obj);
             if !v_dict.is_empty() {
                 out.push((fq_name.clone(), v_dict));
@@ -165,19 +162,19 @@ fn parse_sig_dict(
         .map(|n| String::from_utf8_lossy(n).to_string());
 
     // /Name — signer name from the dictionary (fallback if cert parsing fails).
-    let dict_name = get(b"Name").and_then(|o| pdf_string(o));
+    let dict_name = get(b"Name").and_then(pdf_string);
 
     // /M — signing time from the dictionary.
-    let dict_time = get(b"M").and_then(|o| pdf_string(o)).map(|s| parse_pdf_date(&s));
+    let dict_time = get(b"M").and_then(pdf_string).map(|s| parse_pdf_date(&s));
 
     // /Reason
-    let reason = get(b"Reason").and_then(|o| pdf_string(o));
+    let reason = get(b"Reason").and_then(pdf_string);
 
     // /Location
-    let location = get(b"Location").and_then(|o| pdf_string(o));
+    let location = get(b"Location").and_then(pdf_string);
 
     // /ByteRange — array of 4 integers [off1, len1, off2, len2].
-    let byte_range = get(b"ByteRange").and_then(|o| parse_byte_range(o));
+    let byte_range = get(b"ByteRange").and_then(parse_byte_range);
 
     // Check byte coverage.
     let covers_whole_doc = byte_range
@@ -229,11 +226,7 @@ fn acroform_fields(doc: &Document) -> Option<Vec<ObjectId>> {
     let acro_dict = resolve_dict_ref(doc, acro_ref)?;
     let fields_obj = acro_dict.iter().find(|(k, _)| &k[..] == b"Fields")?.1;
     let arr = resolve_obj(doc, fields_obj).as_array().ok()?;
-    Some(
-        arr.iter()
-            .filter_map(|o| o.as_reference().ok())
-            .collect(),
-    )
+    Some(arr.iter().filter_map(|o| o.as_reference().ok()).collect())
 }
 
 // ── ByteRange validation ─────────────────────────────────────────────────
@@ -278,7 +271,6 @@ fn check_byte_coverage(br: &[i64], file_len: usize) -> bool {
 /// Minimal ASN.1 DER parser — just enough to walk a PKCS#7 SignedData and
 /// pull the first signer's certificate subject CN and signing time. This
 /// avoids adding heavy crypto crates for a display-only feature.
-
 fn parse_pkcs7_signer(data: &[u8]) -> (Option<String>, Option<String>) {
     // The PKCS#7 ContentInfo is a SEQUENCE { contentType OID, content [0] }.
     // content wraps SignedData { version, digestAlgorithms, encapContentInfo,
@@ -346,10 +338,7 @@ fn parse_pkcs7_signer(data: &[u8]) -> (Option<String>, Option<String>) {
 /// Extract the Common Name (CN) from a certificate's Subject field.
 fn extract_subject_cn(cert_seq_content: &[u8]) -> Option<String> {
     // Certificate ::= SEQUENCE { tbsCertificate, signatureAlgorithm, signature }
-    let tbs = match der_sequence(cert_seq_content) {
-        Some(inner) => inner,
-        None => return None,
-    };
+    let tbs = der_sequence(cert_seq_content)?;
 
     let tbs_fields = der_collect_tlvs(tbs);
 

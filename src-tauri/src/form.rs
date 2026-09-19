@@ -56,7 +56,10 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
         values.iter().map(|v| (v.field_name.as_str(), v)).collect();
 
     // Viewers regenerate /AP from /V + /DA + /DR when this is set.
-    if let Ok(af) = doc.get_object_mut(acroform_id).and_then(|o| o.as_dict_mut()) {
+    if let Ok(af) = doc
+        .get_object_mut(acroform_id)
+        .and_then(|o| o.as_dict_mut())
+    {
         af.set("NeedAppearances", Object::Boolean(true));
     }
 
@@ -74,7 +77,9 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
     let mut stack: Vec<(ObjectId, String)> =
         roots.into_iter().map(|r| (r, String::new())).collect();
     while let Some((id, prefix)) = stack.pop() {
-        let Ok(d) = doc.get_dictionary(id) else { continue };
+        let Ok(d) = doc.get_dictionary(id) else {
+            continue;
+        };
         let part = d
             .get(b"T")
             .ok()
@@ -96,7 +101,11 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
         let child_fields: Vec<ObjectId> = kids
             .iter()
             .copied()
-            .filter(|k| doc.get_dictionary(*k).map(|kd| kd.get(b"T").is_ok()).unwrap_or(false))
+            .filter(|k| {
+                doc.get_dictionary(*k)
+                    .map(|kd| kd.get(b"T").is_ok())
+                    .unwrap_or(false)
+            })
             .collect();
         if !child_fields.is_empty() {
             for c in child_fields {
@@ -104,25 +113,35 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
             }
         } else {
             let widgets = if kids.is_empty() { vec![id] } else { kids };
-            targets.push(Target { field_id: id, name, widgets });
+            targets.push(Target {
+                field_id: id,
+                name,
+                widgets,
+            });
         }
     }
 
     // Phase 2 (mutable): set values on the collected targets.
     for t in targets {
-        let Some(v) = map.get(t.name.as_str()) else { continue };
+        let Some(v) = map.get(t.name.as_str()) else {
+            continue;
+        };
         match v.kind.as_str() {
             "checkbox" | "radio" => {
-                let on = if v.value.is_empty() { "Off".to_string() } else { v.value.clone() };
+                let on = if v.value.is_empty() {
+                    "Off".to_string()
+                } else {
+                    v.value.clone()
+                };
                 set_name(doc, t.field_id, "V", &on);
                 for w in &t.widgets {
                     let won = widget_on_state(doc, *w);
-                    let as_val =
-                        if !v.value.is_empty() && won.as_deref() == Some(v.value.as_str()) {
-                            v.value.clone()
-                        } else {
-                            "Off".to_string()
-                        };
+                    let as_val = if !v.value.is_empty() && won.as_deref() == Some(v.value.as_str())
+                    {
+                        v.value.clone()
+                    } else {
+                        "Off".to_string()
+                    };
                     set_name(doc, *w, "AS", &as_val);
                 }
             }
@@ -143,7 +162,9 @@ pub fn apply_values(doc: &mut Document, acroform_id: ObjectId, values: &[FormVal
 pub fn strip_widgets(doc: &mut Document, pages: &[ObjectId]) {
     for &pid in pages {
         let refs: Vec<ObjectId> = {
-            let Ok(pd) = doc.get_dictionary(pid) else { continue };
+            let Ok(pd) = doc.get_dictionary(pid) else {
+                continue;
+            };
             match pd.get(b"Annots") {
                 Ok(Object::Array(a)) => a.iter().filter_map(|o| o.as_reference().ok()).collect(),
                 Ok(Object::Reference(r)) => doc

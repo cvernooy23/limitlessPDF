@@ -3,7 +3,7 @@
   import type { Tool } from "./annotations";
 
   const {
-    pageKey,
+    pageKey: _pageKey,
     scale,
     tool = "none",
     fields,
@@ -37,8 +37,7 @@
           maxlength={f.maxLen ?? undefined}
           value={f.value}
           oninput={(e) => onChange(f, (e.target as HTMLTextAreaElement).value)}
-          onpointerdown={(e) => e.stopPropagation()}
-        ></textarea>
+          onpointerdown={(e) => e.stopPropagation()}></textarea>
       {:else}
         <input
           class="ff ff-text"

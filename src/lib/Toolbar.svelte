@@ -32,20 +32,47 @@
     [{ id: "open", label: "Open", icon: "M4 4h6l2 2h8v12H4z", enabled: true }],
     [
       { id: "select", label: "Select", icon: "M5 3l14 7-6 1-1 6z", enabled: true, mode: "none" },
-      { id: "search", label: "Search", icon: "M10 4a6 6 0 104 10l5 5 1-1-5-5A6 6 0 0010 4z", enabled: true },
+      {
+        id: "search",
+        label: "Search",
+        icon: "M10 4a6 6 0 104 10l5 5 1-1-5-5A6 6 0 0010 4z",
+        enabled: true,
+      },
     ],
     [
-      { id: "highlight", label: "Highlight", icon: "M4 16l8-8 4 4-8 8H4z", enabled: true, mode: "highlight" },
+      {
+        id: "highlight",
+        label: "Highlight",
+        icon: "M4 16l8-8 4 4-8 8H4z",
+        enabled: true,
+        mode: "highlight",
+      },
       { id: "note", label: "Note", icon: "M5 4h14v10l-4 4H5z", enabled: true, mode: "note" },
       { id: "draw", label: "Draw", icon: "M4 18l9-9 2 2-9 9H4z", enabled: true, mode: "draw" },
     ],
     [
       { id: "text", label: "Text", icon: "M5 5h14M12 5v14M9 19h6", enabled: true, mode: "text" },
-      { id: "edit", label: "Edit text", icon: "M5 16l9-9 3 3-9 9H5z", enabled: true, mode: "edittext" },
+      {
+        id: "edit",
+        label: "Edit text",
+        icon: "M5 16l9-9 3 3-9 9H5z",
+        enabled: true,
+        mode: "edittext",
+      },
     ],
     [
-      { id: "ocr", label: "OCR", icon: "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6M9 12h4M9 15h5", enabled: true },
-      { id: "sig", label: "Signatures", icon: "M4 20l3-3 2 2-3 3H4zM9 15l8-8 2 2-8 8M16 4l2-2 4 4-2 2", enabled: true },
+      {
+        id: "ocr",
+        label: "OCR",
+        icon: "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6M9 12h4M9 15h5",
+        enabled: true,
+      },
+      {
+        id: "sig",
+        label: "Signatures",
+        icon: "M4 20l3-3 2 2-3 3H4zM9 15l8-8 2 2-8 8M16 4l2-2 4 4-2 2",
+        enabled: true,
+      },
     ],
   ];
 
@@ -85,7 +112,13 @@
         title={tool.enabled === undefined ? `${tool.label} — coming soon` : tool.label}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d={tool.icon} stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+          <path
+            d={tool.icon}
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
         </svg>
         <span class="text-xs">{tool.label}</span>
       </button>

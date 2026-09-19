@@ -20,14 +20,14 @@ editing/export.
 
 ## Stack
 
-| Layer | Tech |
-|---|---|
-| Shell / packaging | Tauri 2.x |
-| Core | Rust (`pdfium-render`, `lopdf`, `window-vibrancy`) |
-| UI | Svelte 5 + TypeScript + Vite |
-| Styling | Tailwind CSS v4 + custom glass tokens |
-| Display engine | pdf.js |
-| Edit/export engine | PDFium |
+| Layer              | Tech                                               |
+| ------------------ | -------------------------------------------------- |
+| Shell / packaging  | Tauri 2.x                                          |
+| Core               | Rust (`pdfium-render`, `lopdf`, `window-vibrancy`) |
+| UI                 | Svelte 5 + TypeScript + Vite                       |
+| Styling            | Tailwind CSS v4 + custom glass tokens              |
+| Display engine     | pdf.js                                             |
+| Edit/export engine | PDFium                                             |
 
 ## Prerequisites
 
@@ -73,7 +73,7 @@ npm run tauri icon src-tauri/icons/source.png
 
 ## PDFium binaries
 
-`pdfium-render` loads the PDFium dynamic library **at runtime** -- it is *not*
+`pdfium-render` loads the PDFium dynamic library **at runtime** -- it is _not_
 linked at build time, so the project compiles without it. The status badge in
 the app reads "PDFium not found" until you provide the library.
 

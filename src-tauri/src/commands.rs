@@ -106,7 +106,6 @@ pub fn engine_status(app: tauri::AppHandle) -> engine::EngineStatus {
     engine::status_in(&dirs)
 }
 
-
 // ── OCR commands ──────────────────────────────────────────────────────────
 
 /// Check whether Tesseract is installed and what languages are available.
@@ -144,7 +143,6 @@ pub fn run_ocr(
     };
     crate::ocr::run_ocr(&req)
 }
-
 
 // ── Signature commands ───────────────────────────────────────────────────
 

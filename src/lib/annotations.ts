@@ -72,12 +72,7 @@ function segmentDistance(
  * annotation under (x, y), or null. Done in JS rather than via SVG hit-testing,
  * which proved unreliable inside the webview.
  */
-export function hitTest(
-  annos: Annotation[],
-  x: number,
-  y: number,
-  scale: number,
-): string | null {
+export function hitTest(annos: Annotation[], x: number, y: number, scale: number): string | null {
   for (let i = annos.length - 1; i >= 0; i--) {
     const a = annos[i];
     if (a.type === "highlight") {
@@ -120,7 +115,9 @@ export function inkToPath(paths: Point[][], scale: number): string {
   return paths
     .map((stroke) =>
       stroke
-        .map((p, i) => `${i === 0 ? "M" : "L"}${(p.x * scale).toFixed(2)} ${(p.y * scale).toFixed(2)}`)
+        .map(
+          (p, i) => `${i === 0 ? "M" : "L"}${(p.x * scale).toFixed(2)} ${(p.y * scale).toFixed(2)}`,
+        )
         .join(" "),
     )
     .join(" ");

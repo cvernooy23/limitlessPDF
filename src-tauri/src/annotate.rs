@@ -69,6 +69,7 @@ impl SaveAnnotation {
 ///
 /// With a single source this is just reorder/rotate/delete; with several it
 /// merges/inserts pages across documents.
+#[allow(clippy::too_many_arguments)]
 pub fn save(
     sources: Vec<String>,
     dest: &str,
@@ -129,7 +130,11 @@ pub fn save(
         if let Ok(d) = merged.get_object_mut(pid).and_then(|o| o.as_dict_mut()) {
             d.set("Parent", Object::Reference(pages_root));
             if entry.rotation != 0 {
-                let eff = d.get(b"Rotate").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0) as i32;
+                let eff = d
+                    .get(b"Rotate")
+                    .ok()
+                    .and_then(|o| o.as_i64().ok())
+                    .unwrap_or(0) as i32;
                 let rot = (((eff + entry.rotation) % 360) + 360) % 360;
                 d.set("Rotate", Object::Integer(rot as i64));
             }
@@ -139,7 +144,10 @@ pub fn save(
     }
 
     let count = kids.len() as i64;
-    if let Ok(root) = merged.get_object_mut(pages_root).and_then(|o| o.as_dict_mut()) {
+    if let Ok(root) = merged
+        .get_object_mut(pages_root)
+        .and_then(|o| o.as_dict_mut())
+    {
         root.set("Type", Object::Name(b"Pages".to_vec()));
         root.set("Kids", Object::Array(kids));
         root.set("Count", Object::Integer(count));
@@ -194,7 +202,9 @@ pub fn save(
         }
     }
 
-    merged.save(dest).map_err(|e| format!("Couldn't save PDF: {e}"))?;
+    merged
+        .save(dest)
+        .map_err(|e| format!("Couldn't save PDF: {e}"))?;
     Ok(())
 }
 
@@ -232,7 +242,8 @@ fn encrypt_document(doc: &mut Document, password: &str) -> Result<(), String> {
         };
         EncryptionState::try_from(version).map_err(|e| format!("Encryption setup failed: {e}"))?
     };
-    doc.encrypt(&state).map_err(|e| format!("Encryption failed: {e}"))?;
+    doc.encrypt(&state)
+        .map_err(|e| format!("Encryption failed: {e}"))?;
     Ok(())
 }
 
@@ -260,7 +271,10 @@ fn ensure_file_id(doc: &mut Document) {
 fn resolve_inherited(doc: &mut Document, page_id: ObjectId) {
     const KEYS: [&[u8]; 4] = [b"MediaBox", b"CropBox", b"Resources", b"Rotate"];
     for key in KEYS {
-        let present = doc.get_dictionary(page_id).map(|d| d.get(key).is_ok()).unwrap_or(false);
+        let present = doc
+            .get_dictionary(page_id)
+            .map(|d| d.get(key).is_ok())
+            .unwrap_or(false);
         if present {
             continue;
         }
@@ -278,7 +292,11 @@ fn resolve_inherited(doc: &mut Document, page_id: ObjectId) {
                         found = Some(v.clone());
                         break;
                     }
-                    cursor = pd.get(b"Parent").ok().cloned().and_then(|o| o.as_reference().ok());
+                    cursor = pd
+                        .get(b"Parent")
+                        .ok()
+                        .cloned()
+                        .and_then(|o| o.as_reference().ok());
                 }
                 Err(_) => break,
             }
@@ -299,9 +317,8 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
             let (w, h) = (x1 - x0, y1 - y0);
 
             // Appearance: translucent, multiply-blended filled rect.
-            let content = format!(
-                "/GS gs\n{r:.4} {g:.4} {b:.4} rg\n{x0:.2} {y0:.2} {w:.2} {h:.2} re f\n"
-            );
+            let content =
+                format!("/GS gs\n{r:.4} {g:.4} {b:.4} rg\n{x0:.2} {y0:.2} {w:.2} {h:.2} re f\n");
             let mut gs = Dictionary::new();
             gs.set("ca", Object::Real(0.4));
             gs.set("BM", Object::Name(b"Multiply".to_vec()));
@@ -336,11 +353,13 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
         }
 
         SaveAnnotation::Draw {
-            color, width, paths, ..
+            color,
+            width,
+            paths,
+            ..
         } => {
             let (r, g, b) = parse_color(color);
-            let (mut minx, mut miny, mut maxx, mut maxy) =
-                (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+            let (mut minx, mut miny, mut maxx, mut maxy) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
             for p in paths {
                 let mut i = 0;
                 while i + 1 < p.len() {
@@ -368,7 +387,10 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
                 let mut first = true;
                 while i + 1 < p.len() {
                     let (x, y) = (p[i], p[i + 1]);
-                    s.push_str(&format!("{x:.2} {y:.2} {}\n", if first { "m" } else { "l" }));
+                    s.push_str(&format!(
+                        "{x:.2} {y:.2} {}\n",
+                        if first { "m" } else { "l" }
+                    ));
                     first = false;
                     nums.push(x.into());
                     nums.push(y.into());
@@ -407,6 +429,7 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn annot_base(
     subtype: &str,
     x0: f32,

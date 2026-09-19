@@ -117,7 +117,6 @@ export async function savePdf(
   });
 }
 
-
 // ── OCR ───────────────────────────────────────────────────────────────────
 
 export interface OcrStatus {
@@ -139,10 +138,7 @@ export async function checkOcrAvailable(): Promise<OcrStatus> {
 }
 
 /** Detect pages that are likely scanned images (little/no extractable text). */
-export async function detectScannedPages(
-  path: string,
-  sourcePassword?: string,
-): Promise<number[]> {
+export async function detectScannedPages(path: string, sourcePassword?: string): Promise<number[]> {
   return invoke<number[]>("detect_scanned_pages", {
     path,
     sourcePassword: sourcePassword ?? null,
@@ -165,7 +161,6 @@ export async function runOcr(
     sourcePassword: sourcePassword ?? null,
   });
 }
-
 
 // ── Signatures ───────────────────────────────────────────────────────────
 

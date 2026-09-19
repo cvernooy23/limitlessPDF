@@ -46,6 +46,7 @@ struct OcrWord {
     text: String,
     /// Bounding box in image-pixel coordinates (x0, y0, x1, y1).
     bbox: (f32, f32, f32, f32),
+    #[allow(dead_code)]
     confidence: f32,
 }
 
@@ -59,11 +60,7 @@ pub fn check_available() -> OcrStatus {
             let raw = String::from_utf8_lossy(&out.stdout).to_string()
                 + &String::from_utf8_lossy(&out.stderr);
             // First line is typically "tesseract 5.x.x"
-            raw.lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string()
+            raw.lines().next().unwrap_or("").trim().to_string()
         }
         Err(_) => {
             return OcrStatus {
@@ -137,10 +134,7 @@ pub fn detect_scanned_pages(path: &str, password: Option<&str>) -> Result<Vec<u3
 
     let mut scanned = Vec::new();
     for (i, page) in doc.pages().iter().enumerate() {
-        let text_len = page
-            .text()
-            .map(|t| t.all().len())
-            .unwrap_or(0);
+        let text_len = page.text().map(|t| t.all().len()).unwrap_or(0);
         // If the page has fewer than 10 characters of extractable text,
         // it's likely a scanned image.
         if text_len < 10 {
@@ -171,14 +165,13 @@ pub fn run_ocr(req: &OcrRequest) -> Result<Vec<OcrPageResult>, String> {
         .map_err(|e| format!("Could not open PDF for rendering: {e:?}"))?;
 
     // Open the same PDF with lopdf for text-layer injection.
-    let mut lopdf_doc = Document::load(&req.src_path)
-        .map_err(|e| format!("lopdf could not open PDF: {e}"))?;
+    let mut lopdf_doc =
+        Document::load(&req.src_path).map_err(|e| format!("lopdf could not open PDF: {e}"))?;
 
     let page_ids: Vec<ObjectId> = lopdf_doc.page_iter().collect();
 
     let tmp_dir = std::env::temp_dir().join("limitlesspdf-ocr");
-    std::fs::create_dir_all(&tmp_dir)
-        .map_err(|e| format!("Temp dir: {e}"))?;
+    std::fs::create_dir_all(&tmp_dir).map_err(|e| format!("Temp dir: {e}"))?;
 
     let mut results = Vec::new();
 
@@ -563,9 +556,11 @@ fn ensure_page_font(
 ) -> Result<(), String> {
     // ── Read phase: determine where the Font dictionary lives ─────────
     let location = {
-        let page_obj = doc.get_object(page_id)
+        let page_obj = doc
+            .get_object(page_id)
             .map_err(|_| "Page not found".to_string())?;
-        let page = page_obj.as_dict()
+        let page = page_obj
+            .as_dict()
             .map_err(|_| "Page is not a dictionary".to_string())?;
 
         match page.get(b"Resources") {
@@ -574,9 +569,7 @@ fn ensure_page_font(
                 match doc.get_object(res_id) {
                     Ok(res_obj) => match res_obj.as_dict() {
                         Ok(res) => match res.get(b"Font") {
-                            Ok(Object::Reference(font_id)) => {
-                                FontDictLocation::Reference(*font_id)
-                            }
+                            Ok(Object::Reference(font_id)) => FontDictLocation::Reference(*font_id),
                             Ok(_) => FontDictLocation::InlineInRefResources(res_id),
                             Err(_) => FontDictLocation::MissingFontInRef(res_id),
                         },
@@ -587,9 +580,7 @@ fn ensure_page_font(
             }
             Ok(res_val) => match res_val.as_dict() {
                 Ok(res) => match res.get(b"Font") {
-                    Ok(Object::Reference(font_id)) => {
-                        FontDictLocation::Reference(*font_id)
-                    }
+                    Ok(Object::Reference(font_id)) => FontDictLocation::Reference(*font_id),
                     Ok(_) => FontDictLocation::InlineInPage,
                     Err(_) => FontDictLocation::MissingFontInInline,
                 },
@@ -603,18 +594,22 @@ fn ensure_page_font(
     match location {
         FontDictLocation::Reference(font_dict_id) => {
             // Font dict is its own object — add our entry directly.
-            let fd_obj = doc.get_object_mut(font_dict_id)
+            let fd_obj = doc
+                .get_object_mut(font_dict_id)
                 .map_err(|_| "Font dict not found".to_string())?;
-            let fd = fd_obj.as_dict_mut()
+            let fd = fd_obj
+                .as_dict_mut()
                 .map_err(|_| "Font dict is not a dictionary".to_string())?;
             fd.set(font_name.as_bytes(), Object::Reference(font_obj_id));
         }
 
         FontDictLocation::InlineInRefResources(res_id) => {
             // Font dict is inline inside a referenced Resources dict.
-            let res_obj = doc.get_object_mut(res_id)
+            let res_obj = doc
+                .get_object_mut(res_id)
                 .map_err(|_| "Resources not found".to_string())?;
-            let res = res_obj.as_dict_mut()
+            let res = res_obj
+                .as_dict_mut()
                 .map_err(|_| "Resources is not a dictionary".to_string())?;
             if let Ok(font_obj) = res.get_mut(b"Font") {
                 if let Ok(fd) = font_obj.as_dict_mut() {
@@ -625,18 +620,17 @@ fn ensure_page_font(
 
         FontDictLocation::InlineInPage => {
             // Both Resources and Font are inline in the page dict.
-            let page_obj = doc.get_object_mut(page_id)
+            let page_obj = doc
+                .get_object_mut(page_id)
                 .map_err(|_| "Page not found".to_string())?;
-            let page = page_obj.as_dict_mut()
+            let page = page_obj
+                .as_dict_mut()
                 .map_err(|_| "Page is not a dictionary".to_string())?;
             if let Ok(res_obj) = page.get_mut(b"Resources") {
                 if let Ok(res) = res_obj.as_dict_mut() {
                     if let Ok(font_obj) = res.get_mut(b"Font") {
                         if let Ok(fd) = font_obj.as_dict_mut() {
-                            fd.set(
-                                font_name.as_bytes(),
-                                Object::Reference(font_obj_id),
-                            );
+                            fd.set(font_name.as_bytes(), Object::Reference(font_obj_id));
                         }
                     }
                 }
@@ -652,9 +646,11 @@ fn ensure_page_font(
             )]);
             let new_font_id = doc.add_object(new_font_dict);
 
-            let res_obj = doc.get_object_mut(res_id)
+            let res_obj = doc
+                .get_object_mut(res_id)
                 .map_err(|_| "Resources not found".to_string())?;
-            let res = res_obj.as_dict_mut()
+            let res = res_obj
+                .as_dict_mut()
                 .map_err(|_| "Resources is not a dictionary".to_string())?;
             res.set(b"Font", Object::Reference(new_font_id));
         }
@@ -667,9 +663,11 @@ fn ensure_page_font(
             )]);
             let new_font_id = doc.add_object(new_font_dict);
 
-            let page_obj = doc.get_object_mut(page_id)
+            let page_obj = doc
+                .get_object_mut(page_id)
                 .map_err(|_| "Page not found".to_string())?;
-            let page = page_obj.as_dict_mut()
+            let page = page_obj
+                .as_dict_mut()
                 .map_err(|_| "Page is not a dictionary".to_string())?;
             if let Ok(res_obj) = page.get_mut(b"Resources") {
                 if let Ok(res) = res_obj.as_dict_mut() {
@@ -687,15 +685,15 @@ fn ensure_page_font(
             )]);
             let new_font_id = doc.add_object(new_font_dict);
 
-            let new_res_dict = Dictionary::from_iter(vec![(
-                b"Font".to_vec(),
-                Object::Reference(new_font_id),
-            )]);
+            let new_res_dict =
+                Dictionary::from_iter(vec![(b"Font".to_vec(), Object::Reference(new_font_id))]);
             let new_res_id = doc.add_object(new_res_dict);
 
-            let page_obj = doc.get_object_mut(page_id)
+            let page_obj = doc
+                .get_object_mut(page_id)
                 .map_err(|_| "Page not found".to_string())?;
-            let page = page_obj.as_dict_mut()
+            let page = page_obj
+                .as_dict_mut()
                 .map_err(|_| "Page is not a dictionary".to_string())?;
             page.set(b"Resources", Object::Reference(new_res_id));
         }
@@ -722,9 +720,11 @@ fn append_to_page_contents(
 ) -> Result<(), String> {
     // ── Read phase: determine what Contents currently holds ────────────
     let shape = {
-        let page_obj = doc.get_object(page_id)
+        let page_obj = doc
+            .get_object(page_id)
             .map_err(|_| "Page not found".to_string())?;
-        let page = page_obj.as_dict()
+        let page = page_obj
+            .as_dict()
             .map_err(|_| "Page is not a dictionary".to_string())?;
 
         match page.get(b"Contents") {
@@ -735,9 +735,11 @@ fn append_to_page_contents(
     };
 
     // ── Write phase: update Contents with the new stream ──────────────
-    let page_obj = doc.get_object_mut(page_id)
+    let page_obj = doc
+        .get_object_mut(page_id)
         .map_err(|_| "Page not found".to_string())?;
-    let page = page_obj.as_dict_mut()
+    let page = page_obj
+        .as_dict_mut()
         .map_err(|_| "Page is not a dictionary".to_string())?;
 
     match shape {

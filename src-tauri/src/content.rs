@@ -89,8 +89,9 @@ pub fn apply(
                         .pages()
                         .get((*src_page - 1) as u16)
                         .map_err(|e| format!("PDFium page {src_page}: {e:?}"))?;
-                    let mut object = PdfPageTextObject::new(&doc, text.clone(), font, PdfPoints::new(*size))
-                        .map_err(|e| format!("PDFium text object: {e:?}"))?;
+                    let mut object =
+                        PdfPageTextObject::new(&doc, text.clone(), font, PdfPoints::new(*size))
+                            .map_err(|e| format!("PDFium text object: {e:?}"))?;
                     let (r, g, b) = parse_color(color);
                     object
                         .set_fill_color(PdfColor::new(r, g, b, 255))
@@ -148,11 +149,9 @@ pub fn apply(
                     }
 
                     if let Some(i) = target.or(fallback) {
-                        if let Ok(mut obj) = page.objects().get(i) {
-                            if let PdfPageObject::Text(ref mut t) = obj {
-                                t.set_text(text)
-                                    .map_err(|e| format!("PDFium set_text: {e:?}"))?;
-                            }
+                        if let Ok(PdfPageObject::Text(ref mut t)) = page.objects().get(i) {
+                            t.set_text(text)
+                                .map_err(|e| format!("PDFium set_text: {e:?}"))?;
                         }
                         // set_text doesn't auto-commit; regenerate the page content.
                         page.regenerate_content()

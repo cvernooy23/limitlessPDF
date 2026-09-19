@@ -14,7 +14,13 @@
 /* ---- base --------------------------------------------------------------- */
 :root {
   color-scheme: dark;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
 }
@@ -66,7 +72,10 @@ body {
 }
 
 .glass-hover {
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 .glass-hover:hover {
   background: rgba(255, 255, 255, 0.1);
