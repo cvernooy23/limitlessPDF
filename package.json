@@ -13,7 +13,8 @@
     "tauri": "tauri",
     "get-pdfium": "node scripts/get-pdfium.mjs",
     "app:dev": "tauri dev",
-    "app:build": "npm run get-pdfium && tauri build"
+    "app:build": "npm run get-pdfium && tauri build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
@@ -36,6 +37,7 @@
     "svelte-check": "^4.1.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^5.0.1"
   }
 }

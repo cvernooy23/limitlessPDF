@@ -433,7 +433,7 @@ fn der_read_tlv(data: &[u8]) -> Option<(u8, usize, &[u8], usize)> {
     }
     let tag = data[0];
     let (length, hdr_rest) = der_read_length(&data[1..])?;
-    let hdr_len = 1 + (data.len() - data[1..].len() - hdr_rest.len());
+    let hdr_len = data.len() - hdr_rest.len();
     // Ensure we don't exceed the remaining data.
     let total = hdr_len + length;
     if total > data.len() {
@@ -611,5 +611,206 @@ fn parse_asn1_time(tag: u8, bytes: &[u8]) -> String {
         } else {
             s.to_string()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── check_byte_coverage ──────────────────────────────────────────────
+
+    #[test]
+    fn check_byte_coverage_valid() {
+        assert!(check_byte_coverage(&[0, 400, 600, 400], 1000));
+    }
+
+    #[test]
+    fn check_byte_coverage_not_starting_at_zero() {
+        assert!(!check_byte_coverage(&[1, 400, 600, 400], 1000));
+    }
+
+    #[test]
+    fn check_byte_coverage_not_ending_at_eof() {
+        assert!(!check_byte_coverage(&[0, 400, 600, 300], 1000));
+    }
+
+    #[test]
+    fn check_byte_coverage_negative_values() {
+        assert!(!check_byte_coverage(&[-1, 400, 600, 400], 1000));
+    }
+
+    #[test]
+    fn check_byte_coverage_overlapping_ranges() {
+        assert!(!check_byte_coverage(&[0, 700, 600, 400], 1000));
+    }
+
+    #[test]
+    fn check_byte_coverage_wrong_length() {
+        assert!(!check_byte_coverage(&[0, 400, 600], 1000));
+    }
+
+    // ── parse_pdf_date ───────────────────────────────────────────────────
+
+    #[test]
+    fn parse_pdf_date_full() {
+        let result = parse_pdf_date("D:20230615120000+05'00'");
+        assert_eq!(result, "2023-06-15 12:00:00+05:00:");
+    }
+
+    #[test]
+    fn parse_pdf_date_no_prefix() {
+        let result = parse_pdf_date("20230615120000");
+        assert_eq!(result, "2023-06-15 12:00:00");
+    }
+
+    #[test]
+    fn parse_pdf_date_short_string() {
+        let result = parse_pdf_date("D:2023");
+        assert_eq!(result, "2023");
+    }
+
+    // ── parse_asn1_time ──────────────────────────────────────────────────
+
+    #[test]
+    fn parse_asn1_utc_time() {
+        let result = parse_asn1_time(0x17, b"230615120000Z");
+        assert_eq!(result, "2023-06-15 12:00:00Z");
+    }
+
+    #[test]
+    fn parse_asn1_utc_time_past_2050() {
+        let result = parse_asn1_time(0x17, b"990101000000Z");
+        assert_eq!(result, "1999-01-01 00:00:00Z");
+    }
+
+    #[test]
+    fn parse_asn1_generalized_time() {
+        let result = parse_asn1_time(0x18, b"20230615120000Z");
+        assert_eq!(result, "2023-06-15 12:00:00Z");
+    }
+
+    #[test]
+    fn parse_asn1_time_short_input() {
+        let result = parse_asn1_time(0x17, b"2306");
+        assert_eq!(result, "2306");
+    }
+
+    // ── DER helpers ──────────────────────────────────────────────────────
+
+    #[test]
+    fn der_read_tlv_sequence() {
+        let data = [0x30, 0x02, 0x01, 0x02];
+        let (tag, hdr_len, content, consumed) = der_read_tlv(&data).unwrap();
+        assert_eq!(tag, 0x30);
+        assert_eq!(hdr_len, 2);
+        assert_eq!(content, &[0x01, 0x02]);
+        assert_eq!(consumed, 4);
+    }
+
+    #[test]
+    fn der_read_tlv_empty() {
+        assert!(der_read_tlv(&[]).is_none());
+    }
+
+    #[test]
+    fn der_read_length_short_form() {
+        let data = [0x05];
+        let (len, rest) = der_read_length(&data).unwrap();
+        assert_eq!(len, 5);
+        assert!(rest.is_empty());
+    }
+
+    #[test]
+    fn der_read_length_long_form() {
+        let data = [0x82, 0x01, 0x00];
+        let (len, rest) = der_read_length(&data).unwrap();
+        assert_eq!(len, 256);
+        assert!(rest.is_empty());
+    }
+
+    #[test]
+    fn der_sequence_extracts_content() {
+        let data = [0x30, 0x03, 0xAA, 0xBB, 0xCC];
+        let content = der_sequence(&data).unwrap();
+        assert_eq!(content, &[0xAA, 0xBB, 0xCC]);
+    }
+
+    #[test]
+    fn der_sequence_rejects_non_sequence() {
+        let data = [0x31, 0x01, 0x00];
+        assert!(der_sequence(&data).is_none());
+    }
+
+    #[test]
+    fn der_find_context_finds_tag() {
+        let data = [0x02, 0x01, 0x05, 0xA0, 0x02, 0x01, 0x02];
+        let content = der_find_context(&data, 0).unwrap();
+        assert_eq!(content, &[0x01, 0x02]);
+    }
+
+    #[test]
+    fn der_find_context_missing_tag() {
+        let data = [0x02, 0x01, 0x05];
+        assert!(der_find_context(&data, 0).is_none());
+    }
+
+    #[test]
+    fn der_collect_tlvs_multiple() {
+        let data = [0x02, 0x01, 0x05, 0x04, 0x02, 0xAA, 0xBB];
+        let tlvs = der_collect_tlvs(&data);
+        assert_eq!(tlvs.len(), 2);
+        assert_eq!(tlvs[0].0, 0x02);
+        assert_eq!(tlvs[1].0, 0x04);
+    }
+
+    // ── pdf_string ───────────────────────────────────────────────────────
+
+    #[test]
+    fn pdf_string_from_literal() {
+        let obj = Object::String(b"hello".to_vec(), lopdf::StringFormat::Literal);
+        assert_eq!(pdf_string(&obj), Some("hello".to_string()));
+    }
+
+    #[test]
+    fn pdf_string_from_utf16be() {
+        let mut bytes = vec![0xFE, 0xFF];
+        for unit in "caf\u{00e9}".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        let obj = Object::String(bytes, lopdf::StringFormat::Literal);
+        assert_eq!(pdf_string(&obj), Some("caf\u{00e9}".to_string()));
+    }
+
+    #[test]
+    fn pdf_string_from_name() {
+        let obj = Object::Name(b"SomeName".to_vec());
+        assert_eq!(pdf_string(&obj), Some("SomeName".to_string()));
+    }
+
+    #[test]
+    fn pdf_string_from_integer_returns_none() {
+        let obj = Object::Integer(42);
+        assert_eq!(pdf_string(&obj), None);
+    }
+
+    // ── parse_byte_range ─────────────────────────────────────────────────
+
+    #[test]
+    fn parse_byte_range_valid() {
+        let arr = Object::Array(vec![
+            Object::Integer(0),
+            Object::Integer(400),
+            Object::Integer(600),
+            Object::Integer(400),
+        ]);
+        let br = parse_byte_range(&arr).unwrap();
+        assert_eq!(br, vec![0, 400, 600, 400]);
+    }
+
+    #[test]
+    fn parse_byte_range_wrong_count() {
+        let arr = Object::Array(vec![Object::Integer(0), Object::Integer(400)]);
+        assert!(parse_byte_range(&arr).is_none());
     }
 }

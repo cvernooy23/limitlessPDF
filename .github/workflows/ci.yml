@@ -48,6 +48,12 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Vitest
+        run: npm test
+
       - name: ESLint
         run: npx eslint .
 
