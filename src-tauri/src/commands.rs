@@ -144,3 +144,16 @@ pub fn run_ocr(
     };
     crate::ocr::run_ocr(&req)
 }
+
+
+// ── Signature commands ───────────────────────────────────────────────────
+
+/// Extract digital signature information from a PDF. Returns details about
+/// each signature field: signer name, date, reason, and byte-coverage status.
+#[tauri::command]
+pub fn check_signatures(
+    path: String,
+    source_password: Option<String>,
+) -> Result<Vec<crate::signature::SignatureInfo>, String> {
+    crate::signature::extract_signatures(&path, source_password.as_deref())
+}

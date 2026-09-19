@@ -14,6 +14,8 @@
     onOpen,
     onSearch,
     onTool,
+    onOcr,
+    onSig,
     activeTool = "none",
     hasDoc = false,
   }: {
@@ -21,6 +23,7 @@
     onSearch?: () => void;
     onTool?: (mode: AnnoTool) => void;
     onOcr?: () => void;
+    onSig?: () => void;
     activeTool?: AnnoTool;
     hasDoc?: boolean;
   } = $props();
@@ -42,6 +45,7 @@
     ],
     [
       { id: "ocr", label: "OCR", icon: "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6M9 12h4M9 15h5", enabled: true },
+      { id: "sig", label: "Signatures", icon: "M4 20l3-3 2 2-3 3H4zM9 15l8-8 2 2-8 8M16 4l2-2 4 4-2 2", enabled: true },
     ],
   ];
 
@@ -60,6 +64,8 @@
     if (!isEnabled(t)) return;
     if (t.id === "open") onOpen?.();
     else if (t.id === "search") onSearch?.();
+    else if (t.id === "ocr") onOcr?.();
+    else if (t.id === "sig") onSig?.();
     else if (t.mode) onTool?.(t.mode);
   }
 </script>
