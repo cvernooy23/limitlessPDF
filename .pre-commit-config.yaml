@@ -71,3 +71,9 @@ repos:
         language: system
         pass_filenames: false
         types_or: [ts, svelte]
+
+  # -- Security (ASH - AWS Automated Security Helper) -------------------------
+  - repo: https://github.com/awslabs/automated-security-helper
+    rev: v3.5.8
+    hooks:
+      - id: ash-simple-scan

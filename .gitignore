@@ -25,3 +25,6 @@ src-tauri/lib/
 .uv-tools/
 .agents/
 *.pdf
+
+# ASH security scanner output
+.ash/
