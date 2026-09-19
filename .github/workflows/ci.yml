@@ -76,7 +76,7 @@ jobs:
         run: npm ci
 
       - name: Install UV
-        run: curl -sSf https://astral.sh/uv/install.sh | sh
+        uses: astral-sh/setup-uv@v4
 
       - name: Run ASH
         run: uvx git+https://github.com/awslabs/automated-security-helper.git@v3.5.8 --mode local
