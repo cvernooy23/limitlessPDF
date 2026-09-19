@@ -3,6 +3,7 @@ mod commands;
 mod content;
 mod engine;
 mod form;
+mod ocr;
 
 use tauri::Manager;
 
@@ -23,6 +24,9 @@ pub fn run() {
             commands::snapshot_pdf,
             commands::save_pdf,
             commands::export_file,
+            commands::check_ocr_available,
+            commands::detect_scanned_pages,
+            commands::run_ocr,
         ])
         .run(tauri::generate_context!())
         .expect("error while running limitlessPDF");

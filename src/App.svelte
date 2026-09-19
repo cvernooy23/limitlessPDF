@@ -6,6 +6,7 @@
   import EmptyState from "./lib/EmptyState.svelte";
   import PdfViewer from "./lib/PdfViewer.svelte";
   import CommentsPanel from "./lib/CommentsPanel.svelte";
+  import OcrPanel from "./lib/OcrPanel.svelte";
   import {
     ANNOTATION_COLORS,
     type Annotation,
@@ -84,6 +85,7 @@
   let annotations = $state<Annotation[]>([]);
   let selectedId = $state<string | null>(null);
   let commentsOpen = $state(false);
+  let ocrOpen = $state(false);
 
   // Content edits (PDFium): new text objects added to pages.
   let textBoxes = $state<TextBox[]>([]);
@@ -632,11 +634,11 @@
 <div class="app-root flex h-full flex-col p-2.5 gap-2.5">
   <div class="no-print"><TitleBar /></div>
 
-  <div class="no-print flex items-center gap-3 px-1">
-    <div class="min-w-0 flex-1 overflow-x-auto">
-      <Toolbar onOpen={handleOpen} onSearch={toggleSearch} onTool={setTool} activeTool={tool} hasDoc={!!doc} />
+  <div class="no-print flex flex-wrap items-center gap-2 px-1">
+    <div class="min-w-[280px] flex-1 overflow-x-auto scrollbar-none">
+      <Toolbar onOpen={handleOpen} onSearch={toggleSearch} onOcr={() => (ocrOpen = !ocrOpen)} onTool={setTool} activeTool={tool} hasDoc={!!doc} />
     </div>
-    <div class="flex shrink-0 items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       {#if doc}
         {#if hasForm}
           <div class="form-toggle glass" title="How form fields are written when you save">
@@ -905,6 +907,18 @@
           onEdit={editNote}
           onDelete={deleteAnnotation}
           onClose={() => (commentsOpen = false)}
+        />
+      </div>
+    {/if}
+      {#if doc && ocrOpen && filePath}
+      <div class="no-print contents">
+        <OcrPanel
+          {filePath}
+          sourcePassword={openedPassword ?? undefined}
+          onDone={() => {
+            saveMsg = "OCR complete — reload the file to see searchable text.";
+          }}
+          onClose={() => (ocrOpen = false)}
         />
       </div>
     {/if}
@@ -1261,6 +1275,9 @@
       transform: rotate(360deg);
     }
   }
+
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
   /* Print: show only the page stack, flowed one page per sheet. The chrome is
      marked .no-print; the layout wrappers are neutralized so pages can flow. */
