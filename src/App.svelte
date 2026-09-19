@@ -7,6 +7,7 @@
   import PdfViewer from "./lib/PdfViewer.svelte";
   import CommentsPanel from "./lib/CommentsPanel.svelte";
   import OcrPanel from "./lib/OcrPanel.svelte";
+  import SignaturePanel from "./lib/SignaturePanel.svelte";
   import {
     ANNOTATION_COLORS,
     type Annotation,
@@ -86,6 +87,7 @@
   let selectedId = $state<string | null>(null);
   let commentsOpen = $state(false);
   let ocrOpen = $state(false);
+  let sigOpen = $state(false);
 
   // Content edits (PDFium): new text objects added to pages.
   let textBoxes = $state<TextBox[]>([]);
@@ -636,7 +638,7 @@
 
   <div class="no-print flex flex-wrap items-center gap-2 px-1">
     <div class="min-w-[280px] flex-1 overflow-x-auto scrollbar-none">
-      <Toolbar onOpen={handleOpen} onSearch={toggleSearch} onOcr={() => (ocrOpen = !ocrOpen)} onTool={setTool} activeTool={tool} hasDoc={!!doc} />
+      <Toolbar onOpen={handleOpen} onSearch={toggleSearch} onOcr={() => (ocrOpen = !ocrOpen)} onSig={() => (sigOpen = !sigOpen)} onTool={setTool} activeTool={tool} hasDoc={!!doc} />
     </div>
     <div class="flex flex-wrap items-center gap-2">
       {#if doc}
@@ -919,6 +921,15 @@
             saveMsg = "OCR complete — reload the file to see searchable text.";
           }}
           onClose={() => (ocrOpen = false)}
+        />
+      </div>
+    {/if}
+    {#if doc && sigOpen && filePath}
+      <div class="no-print contents">
+        <SignaturePanel
+          {filePath}
+          sourcePassword={openedPassword ?? undefined}
+          onClose={() => (sigOpen = false)}
         />
       </div>
     {/if}

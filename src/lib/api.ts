@@ -165,3 +165,28 @@ export async function runOcr(
     sourcePassword: sourcePassword ?? null,
   });
 }
+
+
+// ── Signatures ───────────────────────────────────────────────────────────
+
+export interface SignatureInfo {
+  fieldName: string;
+  signerName: string | null;
+  signingTime: string | null;
+  reason: string | null;
+  location: string | null;
+  subFilter: string | null;
+  coversWholeDoc: boolean;
+  status: string;
+}
+
+/** Extract digital signature information from a PDF. */
+export async function checkSignatures(
+  path: string,
+  sourcePassword?: string,
+): Promise<SignatureInfo[]> {
+  return invoke<SignatureInfo[]>("check_signatures", {
+    path,
+    sourcePassword: sourcePassword ?? null,
+  });
+}

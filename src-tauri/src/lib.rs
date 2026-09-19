@@ -4,6 +4,7 @@ mod content;
 mod engine;
 mod form;
 mod ocr;
+mod signature;
 
 use tauri::Manager;
 
@@ -27,6 +28,7 @@ pub fn run() {
             commands::check_ocr_available,
             commands::detect_scanned_pages,
             commands::run_ocr,
+            commands::check_signatures,
         ])
         .run(tauri::generate_context!())
         .expect("error while running limitlessPDF");
