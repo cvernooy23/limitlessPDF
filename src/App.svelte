@@ -392,7 +392,7 @@
       };
       annotations = annotations.map((a) => {
         if (a.pageKey !== item.key) return a;
-        if (a.type === "highlight") {
+        if (a.type === "highlight" || a.type === "underline" || a.type === "strikethrough") {
           const [x0, y0] = remap(a.rect.x, a.rect.y);
           const [x1, y1] = remap(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
           return {

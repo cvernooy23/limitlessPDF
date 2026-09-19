@@ -1,5 +1,5 @@
 //! Persist annotations into a PDF as standard annotation objects (Highlight,
-//! Ink, Text) using pure-Rust `lopdf`. Each markup annotation also gets an
+//! Underline, StrikeOut, Ink, Text) using pure-Rust `lopdf`. Each markup annotation also gets an
 //! appearance stream (/AP) so it renders consistently across viewers.
 //!
 //! Coordinates arrive already converted to PDF user space (origin bottom-left)
@@ -50,6 +50,16 @@ pub enum SaveAnnotation {
         y: f32,
         text: String,
     },
+    Underline {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+    },
+    Strikethrough {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+    },
 }
 
 impl SaveAnnotation {
@@ -58,7 +68,9 @@ impl SaveAnnotation {
         (match self {
             SaveAnnotation::Highlight { out_index, .. }
             | SaveAnnotation::Draw { out_index, .. }
-            | SaveAnnotation::Note { out_index, .. } => *out_index,
+            | SaveAnnotation::Note { out_index, .. }
+            | SaveAnnotation::Underline { out_index, .. }
+            | SaveAnnotation::Strikethrough { out_index, .. } => *out_index,
         }) as usize
     }
 }
@@ -411,6 +423,70 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
             let mut bs = Dictionary::new();
             bs.set("W", Object::Real(*width));
             d.set("BS", Object::Dictionary(bs));
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
+        SaveAnnotation::Underline { color, rect, .. } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+
+            // Appearance: a line along the bottom edge of the rect.
+            let content =
+                format!("{r:.4} {g:.4} {b:.4} RG\n1 w\n{x0:.2} {y0:.2} m {x1:.2} {y0:.2} l S\n");
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0, y0 - 1.0, x1, y0 + 1.0));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Underline", x0, y0, x1, y1, r, g, b);
+            d.set(
+                "QuadPoints",
+                Object::Array(vec![
+                    x0.into(),
+                    y1.into(),
+                    x1.into(),
+                    y1.into(),
+                    x0.into(),
+                    y0.into(),
+                    x1.into(),
+                    y0.into(),
+                ]),
+            );
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
+        SaveAnnotation::Strikethrough { color, rect, .. } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+            let mid_y = (y0 + y1) / 2.0;
+
+            // Appearance: a line through the vertical center of the rect.
+            let content = format!(
+                "{r:.4} {g:.4} {b:.4} RG\n1 w\n{x0:.2} {mid_y:.2} m {x1:.2} {mid_y:.2} l S\n"
+            );
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0, mid_y - 1.0, x1, mid_y + 1.0));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("StrikeOut", x0, y0, x1, y1, r, g, b);
+            d.set(
+                "QuadPoints",
+                Object::Array(vec![
+                    x0.into(),
+                    y1.into(),
+                    x1.into(),
+                    y1.into(),
+                    x0.into(),
+                    y0.into(),
+                    x1.into(),
+                    y0.into(),
+                ]),
+            );
             d.set("AP", ap_dict(form_id));
             Ok(doc.add_object(Object::Dictionary(d)))
         }
