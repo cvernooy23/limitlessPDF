@@ -12,6 +12,7 @@ import {
   type RectShapeAnnotation,
   type CircleAnnotation,
   type ArrowAnnotation,
+  type RedactAnnotation,
 } from "./annotations";
 
 // ---------------------------------------------------------------------------
@@ -320,5 +321,35 @@ describe("inkToPath", () => {
 
   it("returns empty string for empty paths", () => {
     expect(inkToPath([], 1)).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// redact
+// ---------------------------------------------------------------------------
+describe("redact", () => {
+  const redact: RedactAnnotation = {
+    id: "r1",
+    pageKey: "p1",
+    color: "#000000",
+    type: "redact",
+    rect: { x: 10, y: 20, w: 100, h: 50 },
+  };
+
+  it("hitTest detects point inside redact rect", () => {
+    expect(hitTest([redact], 60, 45, 1)).toBe("r1");
+  });
+
+  it("hitTest misses outside redact rect", () => {
+    expect(hitTest([redact], 5, 5, 1)).toBeNull();
+  });
+
+  it("hitTest respects scale on redact", () => {
+    expect(hitTest([redact], 120, 90, 2)).toBe("r1");
+    expect(hitTest([redact], 5, 5, 2)).toBeNull();
+  });
+
+  it("color is always black", () => {
+    expect(redact.color).toBe("#000000");
   });
 });

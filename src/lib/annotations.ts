@@ -16,7 +16,8 @@ export type Tool =
   | "edittext"
   | "rect"
   | "circle"
-  | "arrow";
+  | "arrow"
+  | "redact";
 
 export interface Point {
   x: number;
@@ -75,6 +76,10 @@ export interface ArrowAnnotation extends Base {
   end: Point;
   width: number;
 }
+export interface RedactAnnotation extends Base {
+  type: "redact";
+  rect: Rect;
+}
 export type Annotation =
   | HighlightAnnotation
   | UnderlineAnnotation
@@ -83,7 +88,8 @@ export type Annotation =
   | NoteAnnotation
   | RectShapeAnnotation
   | CircleAnnotation
-  | ArrowAnnotation;
+  | ArrowAnnotation
+  | RedactAnnotation;
 
 export const ANNOTATION_COLORS = ["#ffd23f", "#ff7a90", "#6ee7b7", "#6ea8ff", "#c4a3ff"];
 
@@ -119,7 +125,12 @@ function segmentDistance(
 export function hitTest(annos: Annotation[], x: number, y: number, scale: number): string | null {
   for (let i = annos.length - 1; i >= 0; i--) {
     const a = annos[i];
-    if (a.type === "highlight" || a.type === "underline" || a.type === "strikethrough") {
+    if (
+      a.type === "highlight" ||
+      a.type === "underline" ||
+      a.type === "strikethrough" ||
+      a.type === "redact"
+    ) {
       const x0 = a.rect.x * scale;
       const y0 = a.rect.y * scale;
       const x1 = (a.rect.x + a.rect.w) * scale;
