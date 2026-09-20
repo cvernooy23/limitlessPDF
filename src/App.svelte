@@ -397,7 +397,8 @@
           a.type === "underline" ||
           a.type === "strikethrough" ||
           a.type === "rect" ||
-          a.type === "circle"
+          a.type === "circle" ||
+          a.type === "redact"
         ) {
           const [x0, y0] = remap(a.rect.x, a.rect.y);
           const [x1, y1] = remap(a.rect.x + a.rect.w, a.rect.y + a.rect.h);

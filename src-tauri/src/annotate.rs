@@ -87,6 +87,11 @@ pub enum SaveAnnotation {
         end: PointPdf,
         width: f32,
     },
+    Redact {
+        out_index: u32,
+        color: String,
+        rect: RectPdf,
+    },
 }
 
 impl SaveAnnotation {
@@ -100,7 +105,8 @@ impl SaveAnnotation {
             | SaveAnnotation::Strikethrough { out_index, .. }
             | SaveAnnotation::Rect { out_index, .. }
             | SaveAnnotation::Circle { out_index, .. }
-            | SaveAnnotation::Arrow { out_index, .. } => *out_index,
+            | SaveAnnotation::Arrow { out_index, .. }
+            | SaveAnnotation::Redact { out_index, .. } => *out_index,
         }) as usize
     }
 }
@@ -677,6 +683,28 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
             Ok(doc.add_object(Object::Dictionary(d)))
         }
 
+        SaveAnnotation::Redact { color, rect, .. } => {
+            let (r, g, b) = parse_color(color);
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+            let (w, h) = (x1 - x0, y1 - y0);
+
+            // Appearance: filled rectangle (redaction).
+            let content = format!("{r:.4} {g:.4} {b:.4} rg\n{x0:.2} {y0:.2} {w:.2} {h:.2} re f\n");
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0, y0, x1, y1));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Square", x0, y0, x1, y1, r, g, b);
+            d.set(
+                "IC",
+                Object::Array(vec![Object::Real(r), Object::Real(g), Object::Real(b)]),
+            );
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
+
         SaveAnnotation::Note {
             color, x, y, text, ..
         } => {
@@ -1092,6 +1120,27 @@ mod tests {
         assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Line");
         assert!(d.get(b"L").is_ok());
         assert!(d.get(b"LE").is_ok());
+        assert!(d.get(b"AP").is_ok());
+    }
+
+    #[test]
+    fn build_redact_annotation() {
+        let mut doc = make_doc();
+        let anno = SaveAnnotation::Redact {
+            out_index: 0,
+            color: "#000000".into(),
+            rect: RectPdf {
+                x0: 100.0,
+                y0: 400.0,
+                x1: 300.0,
+                y1: 500.0,
+            },
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Square");
+        // Verify it has interior color (filled)
+        assert!(d.get(b"IC").is_ok());
         assert!(d.get(b"AP").is_ok());
     }
 

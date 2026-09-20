@@ -44,6 +44,7 @@
     kind: "rect" | "circle";
   } | null>(null);
   let draftArrow = $state<{ start: Point; end: Point } | null>(null);
+  let draftRedact = $state<{ x: number; y: number; w: number; h: number } | null>(null);
 
   function toLocal(e: PointerEvent): Point {
     const r = svgEl.getBoundingClientRect();
@@ -95,6 +96,7 @@
     else if (tool === "rect") draftShape = { x: p.x, y: p.y, w: 0, h: 0, kind: "rect" };
     else if (tool === "circle") draftShape = { x: p.x, y: p.y, w: 0, h: 0, kind: "circle" };
     else if (tool === "arrow") draftArrow = { start: { ...p }, end: { ...p } };
+    else if (tool === "redact") draftRedact = { x: p.x, y: p.y, w: 0, h: 0 };
   }
 
   function onMove(e: PointerEvent) {
@@ -196,7 +198,8 @@
       tool === "note" ||
       tool === "rect" ||
       tool === "circle" ||
-      tool === "arrow",
+      tool === "arrow" ||
+      tool === "redact",
   );
 </script>
 
@@ -412,6 +415,19 @@
       points={arrowHead(draftArrow.start, draftArrow.end, scale)}
       fill={color}
       opacity="0.7"
+    />
+  {/if}
+  {#if draftRedact}
+    <rect
+      x={draftRedact.x * scale}
+      y={draftRedact.y * scale}
+      width={draftRedact.w * scale}
+      height={draftRedact.h * scale}
+      fill="#000000"
+      fill-opacity="0.5"
+      stroke="#ff0000"
+      stroke-width="1"
+      stroke-dasharray="4"
     />
   {/if}
 </svg>

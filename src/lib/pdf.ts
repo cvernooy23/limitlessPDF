@@ -27,26 +27,13 @@ export type SavePayload =
   | { type: "draw"; out_index: number; color: string; width: number; paths: number[][] }
   | { type: "note"; out_index: number; color: string; x: number; y: number; text: string }
   | {
-      type: "underline";
+      type: "underline" | "strikethrough";
       out_index: number;
       color: string;
       rect: { x0: number; y0: number; x1: number; y1: number };
     }
   | {
-      type: "strikethrough";
-      out_index: number;
-      color: string;
-      rect: { x0: number; y0: number; x1: number; y1: number };
-    }
-  | {
-      type: "rect";
-      out_index: number;
-      color: string;
-      rect: { x0: number; y0: number; x1: number; y1: number };
-      borderWidth: number;
-    }
-  | {
-      type: "circle";
+      type: "rect" | "circle";
       out_index: number;
       color: string;
       rect: { x0: number; y0: number; x1: number; y1: number };
@@ -59,6 +46,12 @@ export type SavePayload =
       start: { x: number; y: number };
       end: { x: number; y: number };
       width: number;
+    }
+  | {
+      type: "redact";
+      out_index: number;
+      color: string;
+      rect: { x0: number; y0: number; x1: number; y1: number };
     };
 
 export interface LoadedPdf {
@@ -473,7 +466,11 @@ export async function annotationsToPayload(
     const item = pageList[idx];
     const v = await vpFor(item);
     if (!v) continue;
-    if (a.type === "highlight") {
+    if (a.type === "redact") {
+      const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
+      const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
+      out.push({ type: "redact", out_index: idx, color: "#000000", rect: { x0, y0, x1, y1 } });
+    } else if (a.type === "highlight") {
       const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
       const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
       out.push({ type: "highlight", out_index: idx, color: a.color, rect: { x0, y0, x1, y1 } });
