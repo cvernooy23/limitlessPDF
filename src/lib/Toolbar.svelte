@@ -84,8 +84,6 @@
         enabled: true,
         mode: "arrow",
       },
-    ],
-    [
       {
         id: "redact",
         label: "Redact",
