@@ -185,3 +185,45 @@ export async function checkSignatures(
     sourcePassword: sourcePassword ?? null,
   });
 }
+
+// ── Split PDF ──────────────────────────────────────────────────────────
+
+/** A page range for the split command. Pages are 1-based, inclusive. */
+export interface SplitRange {
+  from: number;
+  to: number;
+  label?: string;
+}
+
+/** Open a native folder picker. Returns the chosen directory path, or null. */
+export async function pickFolder(): Promise<string | null> {
+  const selected = await open({
+    multiple: false,
+    directory: true,
+  });
+  return typeof selected === "string" ? selected : null;
+}
+
+/**
+ * Split a PDF into separate files, one per range.
+ * Returns the list of output file paths that were written.
+ */
+export async function splitPdf(
+  source: string,
+  outDir: string,
+  stem: string,
+  ranges: SplitRange[],
+  sourcePassword?: string,
+): Promise<string[]> {
+  return invoke<string[]>("split_pdf", {
+    source,
+    outDir,
+    stem,
+    ranges: ranges.map((r) => ({
+      from: r.from,
+      to: r.to,
+      label: r.label ?? "",
+    })),
+    sourcePassword: sourcePassword ?? null,
+  });
+}
