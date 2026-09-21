@@ -155,3 +155,23 @@ pub fn check_signatures(
 ) -> Result<Vec<crate::signature::SignatureInfo>, String> {
     crate::signature::extract_signatures(&path, source_password.as_deref())
 }
+
+// ── Split PDF ──────────────────────────────────────────────────────────
+
+/// Split a PDF into multiple files, one per page range.
+#[tauri::command]
+pub fn split_pdf(
+    source: String,
+    out_dir: String,
+    stem: String,
+    ranges: Vec<crate::annotate::SplitRange>,
+    source_password: Option<String>,
+) -> Result<Vec<String>, String> {
+    crate::annotate::split_pdf(
+        &source,
+        &out_dir,
+        &stem,
+        &ranges,
+        source_password.as_deref(),
+    )
+}

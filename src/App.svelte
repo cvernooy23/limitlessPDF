@@ -39,7 +39,10 @@
     exportFile,
     baseName,
     inTauri,
+    splitPdf,
+    pickFolder,
     type EngineStatus,
+    type SplitRange,
   } from "./lib/api";
   import { extractDocument, buildExport, type ExportFormat } from "./lib/export";
 
@@ -134,6 +137,12 @@
   // Export to other formats.
   let exportOpen = $state(false);
   let exporting = $state(false);
+
+  // Split PDF state
+  let splitOpen = $state(false);
+  let splitting = $state(false);
+  let splitRangeText = $state("");
+  let splitOutDir = $state<string | null>(null);
   const EXPORT_FORMATS: { id: ExportFormat; label: string }[] = [
     { id: "txt", label: "Plain text (.txt)" },
     { id: "md", label: "Markdown (.md)" },
@@ -162,6 +171,80 @@
       saveMsg = `Export failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
       exporting = false;
+    }
+  }
+
+  /**
+   * Parse a range string like "1-3, 5, 7-10" into SplitRange[].
+   * Accepts: "1-3", "5", "1-3, 5, 7-10", "1 - 3".
+   */
+  function parseRanges(text: string, totalPages: number): SplitRange[] {
+    const ranges: SplitRange[] = [];
+    for (const part of text.split(",")) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const dash = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (dash) {
+        ranges.push({ from: parseInt(dash[1], 10), to: parseInt(dash[2], 10) });
+      } else {
+        const single = trimmed.match(/^(\d+)$/);
+        if (single) {
+          const n = parseInt(single[1], 10);
+          ranges.push({ from: n, to: n });
+        } else {
+          throw new Error(`Invalid range: "${trimmed}"`);
+        }
+      }
+    }
+    // Validate
+    for (const r of ranges) {
+      if (r.from < 1 || r.to < 1) throw new Error("Page numbers start at 1");
+      if (r.from > r.to) throw new Error(`Invalid range: ${r.from}-${r.to}`);
+      if (r.to > totalPages)
+        throw new Error(`Page ${r.to} exceeds document length (${totalPages})`);
+    }
+    return ranges;
+  }
+
+  async function doSplit() {
+    if (!doc || splitting) return;
+    const totalPages = doc.numPages;
+    let ranges: SplitRange[];
+    try {
+      ranges = parseRanges(splitRangeText, totalPages);
+    } catch (e) {
+      saveMsg = `Split failed: ${e instanceof Error ? e.message : String(e)}`;
+      return;
+    }
+    if (ranges.length === 0) {
+      saveMsg = "Enter at least one page range (e.g. 1-3, 5)";
+      return;
+    }
+    if (!splitOutDir) {
+      saveMsg = "Choose an output folder first";
+      return;
+    }
+    splitOpen = false;
+    splitting = true;
+    saveMsg = null;
+    try {
+      const stem = (fileName ?? "document").replace(/\.pdf$/i, "");
+      // The first source is always the primary document.
+      const docId = pageList[0]?.docId;
+      const source = docId ? (srcPaths.get(docId) ?? "") : "";
+      if (!source) throw new Error("No source PDF available");
+      const written = await splitPdf(
+        source,
+        splitOutDir,
+        stem,
+        ranges,
+        openedPassword ?? undefined,
+      );
+      saveMsg = `Split into ${written.length} file${written.length === 1 ? "" : "s"}`;
+    } catch (e) {
+      saveMsg = `Split failed: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      splitting = false;
     }
   }
 
@@ -808,6 +891,18 @@
         </div>
         <button
           class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          onclick={() => {
+            splitRangeText = "";
+            splitOutDir = null;
+            splitOpen = true;
+          }}
+          disabled={splitting || !doc}
+          title="Split PDF into separate files by page range"
+        >
+          {splitting ? "Splitting\u2026" : "Split"}
+        </button>
+        <button
+          class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
           onclick={insertPdf}
           disabled={saving || loading}
           title="Insert pages from another PDF (appended; drag to reposition)"
@@ -1069,6 +1164,65 @@
     </span>
     <span>{doc ? `${doc.numPages} pages` : "M1 viewer — Tauri · Svelte · pdf.js"}</span>
   </footer>
+
+  {#if splitOpen}
+    <div class="pw-modal-backdrop no-print">
+      <div class="pw-modal glass" style="width: 380px;">
+        <div class="text-lg">&#9986;</div>
+        <div class="pw-modal-title">Split PDF</div>
+        <div class="pw-modal-sub">
+          Enter page ranges separated by commas. Examples: 1-3, 5, 7-10
+        </div>
+        <input
+          type="text"
+          class="pw-modal-input"
+          placeholder="e.g. 1-3, 5, 7-10"
+          bind:value={splitRangeText}
+          autocomplete="off"
+        />
+        <div style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
+          <button
+            class="pw-modal-btn"
+            style="flex: none; padding: 8px 14px;"
+            type="button"
+            onclick={async () => {
+              const dir = await pickFolder();
+              if (dir) splitOutDir = dir;
+            }}
+          >
+            {splitOutDir ? "Change folder" : "Choose folder"}
+          </button>
+          {#if splitOutDir}
+            <span
+              class="text-xs text-[var(--color-ink-dim)] truncate"
+              title={splitOutDir}
+              style="min-width: 0;"
+            >
+              {splitOutDir.split(/[\\/]/).pop()}
+            </span>
+          {/if}
+        </div>
+        {#if doc}
+          <div class="text-xs text-[var(--color-ink-dim)]" style="margin-top: 2px;">
+            Document has {doc.numPages} page{doc.numPages === 1 ? "" : "s"}
+          </div>
+        {/if}
+        <div class="pw-modal-actions">
+          <button type="button" class="pw-modal-btn" onclick={() => (splitOpen = false)}
+            >Cancel</button
+          >
+          <button
+            type="button"
+            class="pw-modal-btn primary"
+            disabled={!splitRangeText.trim() || !splitOutDir}
+            onclick={doSplit}
+          >
+            Split
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if pwPrompt}
     <div class="pw-modal-backdrop no-print">
