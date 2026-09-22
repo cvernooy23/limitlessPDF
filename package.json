@@ -1,6 +1,6 @@
 {
   "name": "limitlesspdf",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A modern, glassy cross-platform PDF reader and editor",
   "type": "module",
   "license": "MIT",
