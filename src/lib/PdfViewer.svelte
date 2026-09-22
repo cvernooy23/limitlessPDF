@@ -26,12 +26,13 @@
     selectedId = null,
     onAddAnnotation,
     onSelectAnnotation,
-    textBoxes = [],
     fontSize = 16,
     onAddTextBox,
     onEditTextBox,
-    formFields = [],
     onFormChange,
+    annotationsByPage,
+    textBoxesByPage,
+    formFieldsByPage,
   }: {
     getDoc: (docId: string) => PdfDocument | undefined;
     pageList?: PageItem[];
@@ -46,12 +47,13 @@
     selectedId?: string | null;
     onAddAnnotation?: (a: Annotation) => void;
     onSelectAnnotation?: (id: string | null) => void;
-    textBoxes?: TextBox[];
     fontSize?: number;
     onAddTextBox?: (b: TextBox) => void;
     onEditTextBox?: (id: string, text: string) => void;
-    formFields?: FormField[];
     onFormChange?: (field: FormField, value: string) => void;
+    annotationsByPage?: Map<string, import("./annotations").Annotation[]>;
+    textBoxesByPage?: Map<string, TextBox[]>;
+    formFieldsByPage?: Map<string, FormField[]>;
   } = $props();
 
   // Select mode: hit-test the click against this page's annotations. Runs on the
@@ -118,6 +120,74 @@
   const markedDivs = new Set<HTMLElement>();
   // Tracks the active match element so we only scroll/flash when it changes.
   let activeEl: HTMLElement | null = null;
+
+  // ── Page virtualization ────────────────────────────────────────────────
+  // Only mount canvas + text layer for pages near the viewport. Off-screen
+  // pages keep a lightweight placeholder sized to the last-known dimensions.
+  let visibleKeys = $state<Record<string, boolean>>({});
+  let observer: IntersectionObserver | null = null;
+
+  /** Cached CSS dimensions per page key, so placeholders keep scroll stable. */
+  const pageSizes = new Map<string, { w: number; h: number }>();
+
+  /** Svelte action: set up the IntersectionObserver on the .viewer element. */
+  function initViewerObserver(el: HTMLElement) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        const next = { ...visibleKeys };
+        let changed = false;
+        for (const entry of entries) {
+          const key = (entry.target as HTMLElement).dataset.pageKey;
+          if (!key) continue;
+          const was = !!next[key];
+          const now = entry.isIntersecting;
+          if (was !== now) {
+            next[key] = now;
+            changed = true;
+          }
+        }
+        if (changed) visibleKeys = next;
+      },
+      { root: el, rootMargin: "1500px 0px" },
+    );
+    return {
+      destroy() {
+        observer?.disconnect();
+        observer = null;
+      },
+    };
+  }
+
+  /** Svelte action: observe a single page-wrap element for intersection. */
+  function observePage(el: HTMLElement) {
+    observer?.observe(el);
+    return {
+      destroy() {
+        observer?.unobserve(el);
+      },
+    };
+  }
+
+  /** Svelte action on <canvas>: after the first render, record the CSS size
+   *  so the placeholder can match it when the page scrolls away. */
+  function trackSize(canvas: HTMLCanvasElement) {
+    const key = canvas.closest("[data-page-key]")?.getAttribute("data-page-key");
+    function measure() {
+      if (key && canvas.clientWidth > 0) {
+        pageSizes.set(key, { w: canvas.clientWidth, h: canvas.clientHeight });
+      }
+    }
+    // MutationObserver catches the moment pageRender sets width/height style.
+    const mo = new MutationObserver(measure);
+    mo.observe(canvas, { attributes: true, attributeFilter: ["style", "width", "height"] });
+    // Also measure on mount in case it's already rendered.
+    requestAnimationFrame(measure);
+    return {
+      destroy() {
+        mo.disconnect();
+      },
+    };
+  }
 
   function handleTextReady(key: string, divs: HTMLElement[]) {
     pageDivs.set(key, divs);
@@ -211,58 +281,67 @@
   });
 </script>
 
-<div class="viewer">
+<div class="viewer" use:initViewerObserver>
   {#each pageList as pg, i (pg.key)}
     {@const d = getDoc(pg.docId)}
+    {@const isVisible = !!visibleKeys[pg.key]}
+    {@const cached = pageSizes.get(pg.key)}
     <div
       class="page-wrap"
       id={`page-${pg.key}`}
-      onpointerdown={(e) => onPagePointerDown(e, pg.key)}
+      data-page-key={pg.key}
+      use:observePage
+      onpointerdown={(e) => isVisible && onPagePointerDown(e, pg.key)}
+      style={!isVisible && cached ? `width:${cached.w}px;min-height:${cached.h}px` : undefined}
     >
-      {#if d}
-        <canvas use:pageRender={{ doc: d, page: pg.srcPage, scale, rotation: pg.rotation }}
-        ></canvas>
-        <div
-          class="textLayer"
-          use:textLayerRender={{
-            doc: d,
-            page: pg.srcPage,
-            scale,
-            rotation: pg.rotation,
-            onReady: (_p, divs) => handleTextReady(pg.key, divs),
-          }}
-        ></div>
+      {#if isVisible}
+        {#if d}
+          <canvas
+            use:pageRender={{ doc: d, page: pg.srcPage, scale, rotation: pg.rotation }}
+            use:trackSize
+          ></canvas>
+          <div
+            class="textLayer"
+            use:textLayerRender={{
+              doc: d,
+              page: pg.srcPage,
+              scale,
+              rotation: pg.rotation,
+              onReady: (_p, divs) => handleTextReady(pg.key, divs),
+            }}
+          ></div>
+        {/if}
+        <AnnotationLayer
+          pageKey={pg.key}
+          {scale}
+          {tool}
+          {color}
+          {inkWidth}
+          annotations={annotationsByPage?.get(pg.key) ?? []}
+          {selectedId}
+          onAdd={(a) => onAddAnnotation?.(a)}
+          onSelect={(id) => onSelectAnnotation?.(id)}
+        />
+        <TextBoxLayer
+          pageKey={pg.key}
+          {scale}
+          {tool}
+          {color}
+          {fontSize}
+          boxes={textBoxesByPage?.get(pg.key) ?? []}
+          {selectedId}
+          onAdd={(b) => onAddTextBox?.(b)}
+          onEdit={(id, text) => onEditTextBox?.(id, text)}
+          onSelect={(id) => onSelectAnnotation?.(id)}
+        />
+        <FormLayer
+          pageKey={pg.key}
+          {scale}
+          {tool}
+          fields={formFieldsByPage?.get(pg.key) ?? []}
+          onChange={(field, value) => onFormChange?.(field, value)}
+        />
       {/if}
-      <AnnotationLayer
-        pageKey={pg.key}
-        {scale}
-        {tool}
-        {color}
-        {inkWidth}
-        annotations={annotations.filter((a) => a.pageKey === pg.key)}
-        {selectedId}
-        onAdd={(a) => onAddAnnotation?.(a)}
-        onSelect={(id) => onSelectAnnotation?.(id)}
-      />
-      <TextBoxLayer
-        pageKey={pg.key}
-        {scale}
-        {tool}
-        {color}
-        {fontSize}
-        boxes={textBoxes.filter((b) => b.pageKey === pg.key)}
-        {selectedId}
-        onAdd={(b) => onAddTextBox?.(b)}
-        onEdit={(id, text) => onEditTextBox?.(id, text)}
-        onSelect={(id) => onSelectAnnotation?.(id)}
-      />
-      <FormLayer
-        pageKey={pg.key}
-        {scale}
-        {tool}
-        fields={formFields.filter((f) => f.pageKey === pg.key)}
-        onChange={(field, value) => onFormChange?.(field, value)}
-      />
       <span class="page-num">{i + 1}</span>
     </div>
   {/each}

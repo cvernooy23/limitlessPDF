@@ -201,85 +201,94 @@ export interface FormField {
 
 /** Read interactive form widgets from the document via pdf.js, one entry per
  *  widget, addressed to the matching output page. Push buttons and signature
- *  fields are skipped (nothing to fill). */
+ *  fields are skipped (nothing to fill).
+ *
+ *  Pages are processed in batches, yielding to the main thread between
+ *  batches so large documents don't block the UI. */
+const FORM_DETECT_BATCH = 20;
+
 export async function detectFormFields(
   pageList: PageItem[],
   getDoc: (docId: string) => PdfDocument | undefined,
 ): Promise<FormField[]> {
   const out: FormField[] = [];
-  for (const item of pageList) {
-    const doc = getDoc(item.docId);
-    if (!doc) continue;
-    const page = await doc.getPage(item.srcPage);
-    let annots: any[];
-    try {
-      annots = await page.getAnnotations();
-    } catch {
-      continue;
-    }
-    const rot = (((page.rotate + item.rotation) % 360) + 360) % 360;
-    const vp = page.getViewport({ scale: 1, rotation: rot });
-    for (const a of annots) {
-      if (a.subtype !== "Widget") continue;
-      const ft = a.fieldType as string;
-      let kind: FormField["kind"] | null = null;
-      let onState = "";
-      let options: { value: string; label: string }[] = [];
-      if (ft === "Tx") {
-        kind = "text";
-      } else if (ft === "Btn") {
-        if (a.pushButton) continue;
-        if (a.radioButton) {
-          kind = "radio";
-          onState = String(a.buttonValue ?? "");
+  for (let bi = 0; bi < pageList.length; bi += FORM_DETECT_BATCH) {
+    if (bi > 0) await new Promise<void>((r) => setTimeout(r, 0));
+    const batch = pageList.slice(bi, bi + FORM_DETECT_BATCH);
+    for (const item of batch) {
+      const doc = getDoc(item.docId);
+      if (!doc) continue;
+      const page = await doc.getPage(item.srcPage);
+      let annots: any[];
+      try {
+        annots = await page.getAnnotations();
+      } catch {
+        continue;
+      }
+      const rot = (((page.rotate + item.rotation) % 360) + 360) % 360;
+      const vp = page.getViewport({ scale: 1, rotation: rot });
+      for (const a of annots) {
+        if (a.subtype !== "Widget") continue;
+        const ft = a.fieldType as string;
+        let kind: FormField["kind"] | null = null;
+        let onState = "";
+        let options: { value: string; label: string }[] = [];
+        if (ft === "Tx") {
+          kind = "text";
+        } else if (ft === "Btn") {
+          if (a.pushButton) continue;
+          if (a.radioButton) {
+            kind = "radio";
+            onState = String(a.buttonValue ?? "");
+          } else {
+            kind = "checkbox";
+            onState = String(a.exportValue ?? a.buttonValue ?? "Yes");
+          }
+        } else if (ft === "Ch") {
+          kind = a.combo ? "dropdown" : "listbox";
+          options = (a.options ?? []).map((o: any) => ({
+            value: String(o.exportValue ?? o.displayValue ?? ""),
+            label: String(o.displayValue ?? o.exportValue ?? ""),
+          }));
         } else {
-          kind = "checkbox";
-          onState = String(a.exportValue ?? a.buttonValue ?? "Yes");
+          continue; // Sig or unknown
         }
-      } else if (ft === "Ch") {
-        kind = a.combo ? "dropdown" : "listbox";
-        options = (a.options ?? []).map((o: any) => ({
-          value: String(o.exportValue ?? o.displayValue ?? ""),
-          label: String(o.displayValue ?? o.exportValue ?? ""),
-        }));
-      } else {
-        continue; // Sig or unknown
+
+        // PDF rect -> viewport rect. In pdfjs v6 convertToViewportRectangle
+        // was removed; use convertToViewportPoint for each corner instead.
+        const [vx1, vy1] = vp.convertToViewportPoint(a.rect[0], a.rect[1]);
+        const [vx2, vy2] = vp.convertToViewportPoint(a.rect[2], a.rect[3]);
+        const x = Math.min(vx1, vx2);
+        const y = Math.min(vy1, vy2);
+        const w = Math.abs(vx2 - vx1);
+        const h = Math.abs(vy2 - vy1);
+
+        const fv = Array.isArray(a.fieldValue) ? (a.fieldValue[0] ?? "") : (a.fieldValue ?? "");
+        let value = "";
+        if (kind === "checkbox" || kind === "radio") {
+          value = String(fv) === onState && onState !== "" ? onState : "";
+        } else {
+          value = String(fv ?? "");
+        }
+
+        out.push({
+          id: `${item.key}:${a.id}`,
+          pageKey: item.key,
+          fieldName: String(a.fieldName ?? a.id),
+          kind,
+          x,
+          y,
+          w,
+          h,
+          value,
+          onState,
+          options,
+          multiline: !!a.multiLine,
+          maxLen: typeof a.maxLen === "number" && a.maxLen > 0 ? a.maxLen : null,
+          readOnly: !!a.readOnly,
+          fontSize: a.defaultAppearanceData?.fontSize || Math.max(8, h * 0.62),
+        });
       }
-
-      // PDF rect -> viewport rect. In pdfjs v6 convertToViewportRectangle
-      // was removed; use convertToViewportPoint for each corner instead.
-      const [vx1, vy1] = vp.convertToViewportPoint(a.rect[0], a.rect[1]);
-      const [vx2, vy2] = vp.convertToViewportPoint(a.rect[2], a.rect[3]);
-      const x = Math.min(vx1, vx2);
-      const y = Math.min(vy1, vy2);
-      const w = Math.abs(vx2 - vx1);
-      const h = Math.abs(vy2 - vy1);
-
-      const fv = Array.isArray(a.fieldValue) ? (a.fieldValue[0] ?? "") : (a.fieldValue ?? "");
-      let value = "";
-      if (kind === "checkbox" || kind === "radio") {
-        value = String(fv) === onState && onState !== "" ? onState : "";
-      } else {
-        value = String(fv ?? "");
-      }
-
-      out.push({
-        id: `${item.key}:${a.id}`,
-        pageKey: item.key,
-        fieldName: String(a.fieldName ?? a.id),
-        kind,
-        x,
-        y,
-        w,
-        h,
-        value,
-        onState,
-        options,
-        multiline: !!a.multiLine,
-        maxLen: typeof a.maxLen === "number" && a.maxLen > 0 ? a.maxLen : null,
-        readOnly: !!a.readOnly,
-        fontSize: a.defaultAppearanceData?.fontSize || Math.max(8, h * 0.62),
-      });
     }
   }
   return out;
@@ -521,6 +530,8 @@ interface RenderParams {
 
 export function pageRender(canvas: HTMLCanvasElement, params: RenderParams) {
   let token = 0;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastParams: RenderParams = params;
 
   async function run(p: RenderParams) {
     const current = ++token;
@@ -531,14 +542,40 @@ export function pageRender(canvas: HTMLCanvasElement, params: RenderParams) {
     }
   }
 
+  // First render is immediate.
   run(params);
 
   return {
     update(p: RenderParams) {
-      run(p);
+      lastParams = p;
+      // If only the scale changed, debounce to avoid churning during zoom
+      // gestures. Doc/page/rotation changes render immediately.
+      const scaleOnly =
+        p.doc === params.doc &&
+        p.page === params.page &&
+        (p.rotation ?? 0) === (params.rotation ?? 0);
+      if (scaleOnly) {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          params = lastParams;
+          run(lastParams);
+        }, 120);
+      } else {
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
+        params = p;
+        run(p);
+      }
     },
     destroy() {
-      token++; // invalidate any in-flight render
+      token++;
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
     },
   };
 }
@@ -591,12 +628,38 @@ export function textLayerRender(container: HTMLElement, params: TextLayerParams)
 
   run(params);
 
+  let tlDebounce: ReturnType<typeof setTimeout> | null = null;
+  let lastTlParams: TextLayerParams = params;
+
   return {
     update(p: TextLayerParams) {
-      run(p);
+      lastTlParams = p;
+      const scaleOnly =
+        p.doc === params.doc &&
+        p.page === params.page &&
+        (p.rotation ?? 0) === (params.rotation ?? 0);
+      if (scaleOnly) {
+        if (tlDebounce) clearTimeout(tlDebounce);
+        tlDebounce = setTimeout(() => {
+          tlDebounce = null;
+          params = lastTlParams;
+          run(lastTlParams);
+        }, 120);
+      } else {
+        if (tlDebounce) {
+          clearTimeout(tlDebounce);
+          tlDebounce = null;
+        }
+        params = p;
+        run(p);
+      }
     },
     destroy() {
       token++;
+      if (tlDebounce) {
+        clearTimeout(tlDebounce);
+        tlDebounce = null;
+      }
       try {
         current?.cancel?.();
       } catch {
