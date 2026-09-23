@@ -120,7 +120,6 @@
 
   function isEnabled(t: ToolDef): boolean {
     if (t.enabled === undefined) return false;
-    // Annotation/search tools require an open document.
     if (t.id !== "open" && !hasDoc) return false;
     return true;
   }
@@ -137,38 +136,177 @@
     else if (t.id === "sig") onSig?.();
     else if (t.mode) onTool?.(t.mode);
   }
+
+  // ── Scroll overflow detection ──────────────────────────────────────
+  let trackEl = $state<HTMLElement | null>(null);
+  let canScrollLeft = $state(false);
+  let canScrollRight = $state(false);
+
+  function checkScroll() {
+    if (!trackEl) return;
+    const { scrollLeft, scrollWidth, clientWidth } = trackEl;
+    canScrollLeft = scrollLeft > 2;
+    canScrollRight = scrollLeft + clientWidth < scrollWidth - 2;
+  }
+
+  function scroll(dx: number) {
+    trackEl?.scrollBy({ left: dx, behavior: "smooth" });
+  }
+
+  $effect(() => {
+    if (!trackEl) return;
+    const ro = new ResizeObserver(() => checkScroll());
+    ro.observe(trackEl);
+    checkScroll();
+    return () => ro.disconnect();
+  });
 </script>
 
-<div class="glass sheen flex w-max items-center gap-1 rounded-2xl px-2 py-1.5">
-  {#each groups as group, i}
-    {#if i > 0}
-      <div class="mx-1 h-6 w-px bg-white/10"></div>
-    {/if}
-    {#each group as tool}
-      <button
-        class="tool glass-hover"
-        class:active={isActive(tool)}
-        class:opacity-40={!isEnabled(tool)}
-        disabled={!isEnabled(tool)}
-        onclick={() => handle(tool)}
-        title={tool.enabled === undefined ? `${tool.label} — coming soon` : tool.label}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path
-            d={tool.icon}
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-          />
-        </svg>
-        <span class="text-xs">{tool.label}</span>
-      </button>
-    {/each}
-  {/each}
+<div class="toolbar-wrap">
+  <button
+    class="scroll-arrow left"
+    class:visible={canScrollLeft}
+    onclick={() => scroll(-200)}
+    tabindex={-1}
+    aria-label="Scroll toolbar left"
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M15 6l-6 6 6 6"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </button>
+
+  <div class="toolbar-track" bind:this={trackEl} onscroll={checkScroll}>
+    <div class="glass sheen flex w-max items-center gap-1 rounded-2xl px-2 py-1.5">
+      {#each groups as group, i}
+        {#if i > 0}
+          <div class="mx-1 h-6 w-px bg-white/10"></div>
+        {/if}
+        {#each group as tool}
+          <button
+            class="tool glass-hover"
+            class:active={isActive(tool)}
+            class:opacity-40={!isEnabled(tool)}
+            disabled={!isEnabled(tool)}
+            onclick={() => handle(tool)}
+            title={tool.enabled === undefined ? `${tool.label} — coming soon` : tool.label}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d={tool.icon}
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+            </svg>
+            <span class="tool-label">{tool.label}</span>
+          </button>
+        {/each}
+      {/each}
+    </div>
+  </div>
+
+  <button
+    class="scroll-arrow right"
+    class:visible={canScrollRight}
+    onclick={() => scroll(200)}
+    tabindex={-1}
+    aria-label="Scroll toolbar right"
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </button>
 </div>
 
 <style>
+  /* ── Scroll wrapper ─────────────────────────────────────────────── */
+  .toolbar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .toolbar-track {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .toolbar-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gradient edge fades */
+  .toolbar-wrap::before,
+  .toolbar-wrap::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .toolbar-wrap:has(.scroll-arrow.left.visible)::before {
+    opacity: 1;
+    left: 24px;
+    background: linear-gradient(to right, var(--color-bg, #1a1a2e), transparent);
+  }
+  .toolbar-wrap:has(.scroll-arrow.right.visible)::after {
+    opacity: 1;
+    right: 24px;
+    background: linear-gradient(to left, var(--color-bg, #1a1a2e), transparent);
+  }
+
+  /* Arrow buttons */
+  .scroll-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-ink);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 3;
+  }
+  .scroll-arrow.visible {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+  .scroll-arrow:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .scroll-arrow.left {
+    margin-right: 4px;
+  }
+  .scroll-arrow.right {
+    margin-left: 4px;
+  }
+
+  /* ── Tool buttons ───────────────────────────────────────────────── */
   .tool {
     display: flex;
     align-items: center;
@@ -186,5 +324,12 @@
     background: linear-gradient(135deg, rgba(110, 168, 255, 0.28), rgba(167, 139, 250, 0.28));
     border-color: rgba(110, 168, 255, 0.5);
     color: #fff;
+  }
+
+  /* Print layout: hide toolbar entirely */
+  @media print {
+    .toolbar-wrap {
+      display: none;
+    }
   }
 </style>
