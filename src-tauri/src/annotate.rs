@@ -306,11 +306,15 @@ pub fn split_pdf(
         }
     }
 
+    // Read the source bytes once; each range parses from memory (no repeated I/O).
+    let src_bytes =
+        std::fs::read(source).map_err(|e| format!("Couldn't read \"{source}\": {e}"))?;
+
     let mut written: Vec<String> = Vec::new();
 
     for r in ranges {
-        let mut doc =
-            Document::load(source).map_err(|e| format!("Couldn't open \"{source}\": {e}"))?;
+        let mut doc = Document::load_from(std::io::Cursor::new(&src_bytes))
+            .map_err(|e| format!("Couldn't parse \"{source}\": {e}"))?;
         if doc.is_encrypted() {
             let pw = source_password.unwrap_or("");
             doc.decrypt(pw)

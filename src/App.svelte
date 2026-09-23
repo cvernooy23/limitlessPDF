@@ -102,6 +102,35 @@
   let formFields = $state<FormField[]>([]);
   const formValues = new Map<string, string>();
   let formSaveMode = $state<"editable" | "flatten">("editable");
+
+  // ── Pre-grouped per-page lookups (avoids O(pages*items) filtering) ──
+  const annotationsByPage = $derived.by(() => {
+    const m = new Map<string, import("./lib/annotations").Annotation[]>();
+    for (const a of annotations) {
+      const arr = m.get(a.pageKey);
+      if (arr) arr.push(a);
+      else m.set(a.pageKey, [a]);
+    }
+    return m;
+  });
+  const textBoxesByPage = $derived.by(() => {
+    const m = new Map<string, import("./lib/pdf").TextBox[]>();
+    for (const b of textBoxes) {
+      const arr = m.get(b.pageKey);
+      if (arr) arr.push(b);
+      else m.set(b.pageKey, [b]);
+    }
+    return m;
+  });
+  const formFieldsByPage = $derived.by(() => {
+    const m = new Map<string, import("./lib/pdf").FormField[]>();
+    for (const f of formFields) {
+      const arr = m.get(f.pageKey);
+      if (arr) arr.push(f);
+      else m.set(f.pageKey, [f]);
+    }
+    return m;
+  });
   const hasForm = $derived(formFields.length > 0);
 
   // Encryption (AES-256). When enabled, the saved file requires this password
@@ -971,12 +1000,13 @@
           {selectedId}
           onAddAnnotation={addAnnotation}
           onSelectAnnotation={selectAnnotation}
-          {textBoxes}
           {fontSize}
           onAddTextBox={addTextBox}
           onEditTextBox={editTextBox}
-          {formFields}
           {onFormChange}
+          {annotationsByPage}
+          {textBoxesByPage}
+          {formFieldsByPage}
         />
 
         <!-- Tool options (color / pen size / font size) -->
