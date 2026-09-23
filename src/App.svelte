@@ -784,7 +784,7 @@
   <div class="no-print"><TitleBar /></div>
 
   <div class="no-print flex flex-wrap items-center gap-2 px-1">
-    <div class="min-w-[280px] flex-1 overflow-x-auto scrollbar-none">
+    <div class="min-w-0 flex-1">
       <Toolbar
         onOpen={handleOpen}
         onSearch={toggleSearch}
