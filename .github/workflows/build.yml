@@ -76,7 +76,7 @@ jobs:
           if-no-files-found: ignore
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -111,13 +111,15 @@ jobs:
             release-assets/*
 
   release-unstable:
-    if: github.ref == 'refs/heads/latest'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/latest'
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -135,28 +137,42 @@ jobs:
           \) -exec cp {} release-assets/ \;
           ls -lah release-assets/
 
-      - name: Delete previous unstable release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute next patch version
+        id: version
+        shell: bash
         run: |
-          gh release delete unstable --yes --cleanup-tag 2>/dev/null || true
+          latest_tag=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -n "$latest_tag" ]; then
+            base_version="${latest_tag#v}"
+          else
+            base_version=$(node -p "require('./package.json').version")
+          fi
 
-      - name: Create unstable release
+          IFS='.' read -r major minor patch <<< "$base_version"
+          next_version="${major}.${minor}.$((patch + 1))"
+          next_tag="v${next_version}"
+
+          echo "next_version=${next_version}" >> "$GITHUB_OUTPUT"
+          echo "next_tag=${next_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create next patch release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_TAG: ${{ steps.version.outputs.next_tag }}
+          NEXT_VERSION: ${{ steps.version.outputs.next_version }}
         run: |
-          SHORT_SHA="${GITHUB_SHA:0:7}"
-          cat > /tmp/unstable-release-notes.md << 'EOF'
-          > **This is an unstable development build. Use at your own risk.**
-          >
-          > Built from the `latest` branch — may contain incomplete features, breaking changes, or bugs.
-          > Not intended for production use.
-          >
-          > For stable releases, see the [latest stable release](../../releases/latest).
-          EOF
-          gh release create unstable \
-            --title "Unstable Build (${SHORT_SHA})" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --notes-file /tmp/unstable-release-notes.md \
+          if git rev-parse --verify "refs/tags/${NEXT_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${NEXT_TAG} already exists; skipping release creation."
+            exit 0
+          fi
+
+          git tag "${NEXT_TAG}" "${GITHUB_SHA}"
+          git push origin "${NEXT_TAG}"
+
+          gh release create "${NEXT_TAG}" \
+            --title "${NEXT_TAG}" \
+            --target "${GITHUB_SHA}" \
+            --generate-notes \
             release-assets/*
+
+          echo "Created ${NEXT_TAG} (${NEXT_VERSION}) from latest merge."
