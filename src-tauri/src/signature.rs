@@ -813,4 +813,137 @@ mod tests {
         let arr = Object::Array(vec![Object::Integer(0), Object::Integer(400)]);
         assert!(parse_byte_range(&arr).is_none());
     }
+
+    #[test]
+    fn parse_pdf_date_non_ascii_returns_raw() {
+        let raw = "D:2023\u{00e9}5120000";
+        assert_eq!(parse_pdf_date(raw), "2023\u{00e9}5120000");
+    }
+
+    #[test]
+    fn parse_asn1_time_non_ascii_returns_lossy() {
+        let bytes = [0x17, 0x80, 0xFF];
+        let res = parse_asn1_time(0x17, &bytes);
+        assert!(!res.is_empty());
+    }
+
+    #[test]
+    fn collect_sig_dicts_empty_without_acroform() {
+        let doc = Document::with_version("1.7");
+        let res = collect_sig_dicts(&doc);
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn collect_sig_dicts_circular_kids_guard() {
+        let mut doc = Document::with_version("1.7");
+        let node1_id = doc.new_object_id();
+        let node2_id = doc.new_object_id();
+
+        // node1 -> kids: [node2]
+        let mut node1 = lopdf::Dictionary::new();
+        node1.set(
+            "T",
+            Object::String(b"node1".to_vec(), lopdf::StringFormat::Literal),
+        );
+        node1.set("Kids", Object::Array(vec![Object::Reference(node2_id)]));
+        doc.set_object(node1_id, Object::Dictionary(node1));
+
+        // node2 -> kids: [node1] (circular!)
+        let mut node2 = lopdf::Dictionary::new();
+        node2.set(
+            "T",
+            Object::String(b"node2".to_vec(), lopdf::StringFormat::Literal),
+        );
+        node2.set("Kids", Object::Array(vec![Object::Reference(node1_id)]));
+        doc.set_object(node2_id, Object::Dictionary(node2));
+
+        let mut acroform = lopdf::Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(node1_id)]));
+        let af_id = doc.add_object(Object::Dictionary(acroform));
+
+        let mut catalog = lopdf::Dictionary::new();
+        catalog.set("Type", Object::Name(b"Catalog".to_vec()));
+        catalog.set("AcroForm", Object::Reference(af_id));
+        let cat_id = doc.add_object(Object::Dictionary(catalog));
+        doc.trailer.set("Root", Object::Reference(cat_id));
+
+        // Should complete without overflowing stack
+        let res = collect_sig_dicts(&doc);
+        assert!(res.is_empty()); // Neither node had /FT /Sig
+    }
+
+    #[test]
+    fn extract_signatures_from_pdf() {
+        let mut doc = Document::with_version("1.7");
+
+        // Create /Sig value dictionary
+        let mut sig_val = lopdf::Dictionary::new();
+        sig_val.set("Type", Object::Name(b"Sig".to_vec()));
+        sig_val.set("Filter", Object::Name(b"Adobe.PPKLite".to_vec()));
+        sig_val.set("SubFilter", Object::Name(b"adbe.pkcs7.detached".to_vec()));
+        sig_val.set(
+            "Name",
+            Object::String(b"Alice Signer".to_vec(), lopdf::StringFormat::Literal),
+        );
+        sig_val.set(
+            "Reason",
+            Object::String(b"I approve".to_vec(), lopdf::StringFormat::Literal),
+        );
+        sig_val.set(
+            "Location",
+            Object::String(b"San Francisco".to_vec(), lopdf::StringFormat::Literal),
+        );
+        sig_val.set(
+            "M",
+            Object::String(b"D:20260101120000Z".to_vec(), lopdf::StringFormat::Literal),
+        );
+        sig_val.set(
+            "ByteRange",
+            Object::Array(vec![0.into(), 100.into(), 200.into(), 100.into()]),
+        );
+        let sig_val_id = doc.add_object(Object::Dictionary(sig_val));
+
+        // Create signature field
+        let mut field = lopdf::Dictionary::new();
+        field.set("Type", Object::Name(b"Annot".to_vec()));
+        field.set("Subtype", Object::Name(b"Widget".to_vec()));
+        field.set("FT", Object::Name(b"Sig".to_vec()));
+        field.set(
+            "T",
+            Object::String(b"SignatureField1".to_vec(), lopdf::StringFormat::Literal),
+        );
+        field.set("V", Object::Reference(sig_val_id));
+        let field_id = doc.add_object(Object::Dictionary(field));
+
+        let mut acroform = lopdf::Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(field_id)]));
+        let af_id = doc.add_object(Object::Dictionary(acroform));
+
+        let mut catalog = lopdf::Dictionary::new();
+        catalog.set("Type", Object::Name(b"Catalog".to_vec()));
+        catalog.set("AcroForm", Object::Reference(af_id));
+        let cat_id = doc.add_object(Object::Dictionary(catalog));
+        doc.trailer.set("Root", Object::Reference(cat_id));
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("sig-test-{nanos}.pdf"));
+        let path_str = path.to_string_lossy().into_owned();
+        doc.save(&path).unwrap();
+
+        let sigs = extract_signatures(&path_str, None).unwrap();
+        assert_eq!(sigs.len(), 1);
+        let sig = &sigs[0];
+        assert_eq!(sig.field_name, "SignatureField1");
+        assert_eq!(sig.signer_name.as_deref(), Some("Alice Signer"));
+        assert_eq!(sig.reason.as_deref(), Some("I approve"));
+        assert_eq!(sig.location.as_deref(), Some("San Francisco"));
+        assert_eq!(sig.sub_filter.as_deref(), Some("adbe.pkcs7.detached"));
+        assert!(!sig.covers_whole_doc); // File length won't match 300 exactly
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

@@ -28,3 +28,6 @@ src-tauri/lib/
 
 # ASH security scanner output
 .ash/
+
+# Miscellaneous
+Claude outputs/

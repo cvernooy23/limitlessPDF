@@ -76,3 +76,30 @@ fn ok(message: String) -> EngineStatus {
         message,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_status_in_nonexistent_dir() {
+        let fake_dirs = vec![
+            PathBuf::from("/nonexistent_pdfium_dir_1"),
+            PathBuf::from("/nonexistent_pdfium_dir_2"),
+        ];
+        let status = status_in(&fake_dirs);
+        // Either bound via system library (if installed on runner) or returns not found message
+        assert!(!status.message.is_empty());
+        if !status.available {
+            assert!(status.message.contains("PDFium library not found"));
+        }
+    }
+
+    #[test]
+    fn test_engine_status_serialization() {
+        let status = ok("Test engine message".to_string());
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"available\":true"));
+        assert!(json.contains("Test engine message"));
+    }
+}

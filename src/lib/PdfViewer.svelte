@@ -126,6 +126,8 @@
   // pages keep a lightweight placeholder sized to the last-known dimensions.
   let visibleKeys = $state<Record<string, boolean>>({});
   let observer: IntersectionObserver | null = null;
+  /** Elements queued before the observer was ready. */
+  const pendingObserve = new Set<HTMLElement>();
 
   /** Cached CSS dimensions per page key, so placeholders keep scroll stable. */
   const pageSizes = new Map<string, { w: number; h: number }>();
@@ -150,6 +152,9 @@
       },
       { root: el, rootMargin: "1500px 0px" },
     );
+    // Drain any elements that tried to observe before we were ready.
+    for (const queued of pendingObserve) observer.observe(queued);
+    pendingObserve.clear();
     return {
       destroy() {
         observer?.disconnect();
@@ -160,10 +165,15 @@
 
   /** Svelte action: observe a single page-wrap element for intersection. */
   function observePage(el: HTMLElement) {
-    observer?.observe(el);
+    if (observer) {
+      observer.observe(el);
+    } else {
+      pendingObserve.add(el);
+    }
     return {
       destroy() {
         observer?.unobserve(el);
+        pendingObserve.delete(el);
       },
     };
   }
@@ -292,7 +302,11 @@
       data-page-key={pg.key}
       use:observePage
       onpointerdown={(e) => isVisible && onPagePointerDown(e, pg.key)}
-      style={!isVisible && cached ? `width:${cached.w}px;min-height:${cached.h}px` : undefined}
+      style={!isVisible && cached
+        ? `width:${cached.w}px;min-height:${cached.h}px`
+        : !isVisible
+          ? `min-height:300px`
+          : undefined}
     >
       {#if isVisible}
         {#if d}

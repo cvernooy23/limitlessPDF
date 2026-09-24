@@ -1,0 +1,10 @@
+# ASH (Automated Security Helper) configuration
+# https://awslabs.github.io/automated-security-helper/docs/suppressions/
+
+global_settings:
+  suppressions:
+    # Test fixtures use dummy passwords (savePass, srcPass, pass123, pw, secret).
+    # These are not real credentials — suppress detect-secrets keyword findings.
+    - rule_id: "SECRET-SECRET-KEYWORD"
+      path: "src/lib/api.test.ts"
+      reason: "Test fixture password literals, not real credentials"
