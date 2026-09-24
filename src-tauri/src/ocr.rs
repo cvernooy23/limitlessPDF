@@ -765,3 +765,341 @@ fn append_to_page_contents(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lopdf::Dictionary;
+
+    #[test]
+    fn strip_tags_plain_text() {
+        assert_eq!(strip_tags("hello world"), "hello world");
+    }
+
+    #[test]
+    fn strip_tags_single_tag() {
+        assert_eq!(strip_tags("<b>bold</b>"), "bold");
+    }
+
+    #[test]
+    fn strip_tags_multiple_and_nested_tags() {
+        let input = "<span>Hello <strong><em>wonderful</em></strong> world</span>";
+        assert_eq!(strip_tags(input), "Hello wonderful world");
+    }
+
+    #[test]
+    fn strip_tags_empty_string() {
+        assert_eq!(strip_tags(""), "");
+    }
+
+    #[test]
+    fn extract_bbox_single_quotes() {
+        let tag = "<span class='ocrx_word' title='bbox 10 20 100 200; x_wconf 95'>";
+        assert_eq!(extract_bbox(tag), Some((10.0, 20.0, 100.0, 200.0)));
+    }
+
+    #[test]
+    fn extract_bbox_double_quotes() {
+        let tag = "<span class=\"ocrx_word\" title=\"bbox 5.5 15.5 50.0 60.0\">";
+        assert_eq!(extract_bbox(tag), Some((5.5, 15.5, 50.0, 60.0)));
+    }
+
+    #[test]
+    fn extract_bbox_missing_title() {
+        let tag = "<span class='ocrx_word'>";
+        assert_eq!(extract_bbox(tag), None);
+    }
+
+    #[test]
+    fn extract_bbox_fewer_than_four_numbers() {
+        let tag = "<span class='ocrx_word' title='bbox 10 20 30;'>";
+        assert_eq!(extract_bbox(tag), None);
+    }
+
+    #[test]
+    fn extract_bbox_no_bbox_in_title() {
+        let tag = "<span class='ocrx_word' title='x_wconf 90'>";
+        assert_eq!(extract_bbox(tag), None);
+    }
+
+    #[test]
+    fn extract_confidence_valid() {
+        let tag = "<span title='bbox 0 0 10 10; x_wconf 88'>";
+        assert_eq!(extract_confidence(tag), Some(88.0));
+    }
+
+    #[test]
+    fn extract_confidence_at_end_without_semicolon() {
+        let tag = "<span title='x_wconf 95'>";
+        assert_eq!(extract_confidence(tag), Some(95.0));
+    }
+
+    #[test]
+    fn extract_confidence_missing() {
+        let tag = "<span title='bbox 0 0 10 10'>";
+        assert_eq!(extract_confidence(tag), None);
+    }
+
+    #[test]
+    fn parse_hocr_valid_words() {
+        let html = r#"
+            <div class='ocr_page'>
+                <span class='ocrx_word' title='bbox 10 20 50 40; x_wconf 90'>Hello</span>
+                <span class='ocr_line'>ignored line</span>
+                <span class='ocrx_word' title='bbox 60 20 120 40; x_wconf 85'><strong>World</strong></span>
+            </div>
+        "#;
+        let words = parse_hocr(html, 800.0, 1000.0);
+        assert_eq!(words.len(), 2);
+        assert_eq!(words[0].text, "Hello");
+        assert_eq!(words[0].bbox, (10.0, 20.0, 50.0, 40.0));
+        assert_eq!(words[0].confidence, 90.0);
+
+        assert_eq!(words[1].text, "World");
+        assert_eq!(words[1].bbox, (60.0, 20.0, 120.0, 40.0));
+        assert_eq!(words[1].confidence, 85.0);
+    }
+
+    #[test]
+    fn parse_hocr_empty_and_no_words() {
+        assert!(parse_hocr("", 100.0, 100.0).is_empty());
+        assert!(parse_hocr(
+            "<div class='ocr_page'>No word spans here</div>",
+            100.0,
+            100.0
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn pdf_escape_string_ascii_and_specials() {
+        assert_eq!(pdf_escape_string("plain text"), "plain text");
+        assert_eq!(pdf_escape_string("(nested)"), "\\(nested\\)");
+        assert_eq!(pdf_escape_string("c:\\docs\\file"), "c:\\\\docs\\\\file");
+    }
+
+    #[test]
+    fn pdf_escape_string_latin1_octal() {
+        // 'é' is U+00E9 = 233 = 0o351
+        let res = pdf_escape_string("café");
+        assert_eq!(res, "caf\\351");
+    }
+
+    #[test]
+    fn append_to_page_contents_no_contents() {
+        let mut doc = Document::with_version("1.7");
+        let page_id = doc.add_object(Dictionary::new());
+        let stream_id = doc.add_object(Stream::new(Dictionary::new(), vec![]));
+
+        append_to_page_contents(&mut doc, page_id, stream_id).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        assert_eq!(
+            page.get(b"Contents").unwrap().as_reference().unwrap(),
+            stream_id
+        );
+    }
+
+    #[test]
+    fn append_to_page_contents_single_ref() {
+        let mut doc = Document::with_version("1.7");
+        let stream1_id = doc.add_object(Stream::new(Dictionary::new(), vec![]));
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Contents", Object::Reference(stream1_id));
+        let page_id = doc.add_object(page_dict);
+
+        let stream2_id = doc.add_object(Stream::new(Dictionary::new(), vec![]));
+        append_to_page_contents(&mut doc, page_id, stream2_id).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        let arr = page.get(b"Contents").unwrap().as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].as_reference().unwrap(), stream1_id);
+        assert_eq!(arr[1].as_reference().unwrap(), stream2_id);
+    }
+
+    #[test]
+    fn append_to_page_contents_array() {
+        let mut doc = Document::with_version("1.7");
+        let s1 = doc.add_object(Stream::new(Dictionary::new(), vec![]));
+        let s2 = doc.add_object(Stream::new(Dictionary::new(), vec![]));
+        let mut page_dict = Dictionary::new();
+        page_dict.set(
+            "Contents",
+            Object::Array(vec![Object::Reference(s1), Object::Reference(s2)]),
+        );
+        let page_id = doc.add_object(page_dict);
+
+        let s3 = doc.add_object(Stream::new(Dictionary::new(), vec![]));
+        append_to_page_contents(&mut doc, page_id, s3).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        let arr = page.get(b"Contents").unwrap().as_array().unwrap();
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[2].as_reference().unwrap(), s3);
+    }
+
+    #[test]
+    fn ensure_page_font_missing_all() {
+        let mut doc = Document::with_version("1.7");
+        let page_id = doc.add_object(Dictionary::new());
+        let font_obj_id = doc.add_object(Dictionary::new());
+
+        ensure_page_font(&mut doc, page_id, "F_OCR", font_obj_id).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        let res_ref = page.get(b"Resources").unwrap().as_reference().unwrap();
+        let res = doc.get_dictionary(res_ref).unwrap();
+        let font_ref = res.get(b"Font").unwrap().as_reference().unwrap();
+        let font_dict = doc.get_dictionary(font_ref).unwrap();
+        assert_eq!(
+            font_dict.get(b"F_OCR").unwrap().as_reference().unwrap(),
+            font_obj_id
+        );
+    }
+
+    #[test]
+    fn ensure_page_font_missing_font_in_ref_resources() {
+        let mut doc = Document::with_version("1.7");
+        let res_id = doc.add_object(Dictionary::new());
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Resources", Object::Reference(res_id));
+        let page_id = doc.add_object(page_dict);
+
+        let font_obj_id = doc.add_object(Dictionary::new());
+        ensure_page_font(&mut doc, page_id, "F_OCR", font_obj_id).unwrap();
+
+        let res = doc.get_dictionary(res_id).unwrap();
+        let font_ref = res.get(b"Font").unwrap().as_reference().unwrap();
+        let font_dict = doc.get_dictionary(font_ref).unwrap();
+        assert_eq!(
+            font_dict.get(b"F_OCR").unwrap().as_reference().unwrap(),
+            font_obj_id
+        );
+    }
+
+    #[test]
+    fn ensure_page_font_missing_font_in_inline_resources() {
+        let mut doc = Document::with_version("1.7");
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Resources", Object::Dictionary(Dictionary::new()));
+        let page_id = doc.add_object(page_dict);
+
+        let font_obj_id = doc.add_object(Dictionary::new());
+        ensure_page_font(&mut doc, page_id, "F_OCR", font_obj_id).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        let res = page.get(b"Resources").unwrap().as_dict().unwrap();
+        let font_ref = res.get(b"Font").unwrap().as_reference().unwrap();
+        let font_dict = doc.get_dictionary(font_ref).unwrap();
+        assert_eq!(
+            font_dict.get(b"F_OCR").unwrap().as_reference().unwrap(),
+            font_obj_id
+        );
+    }
+
+    #[test]
+    fn ensure_page_font_reference_font_dict() {
+        let mut doc = Document::with_version("1.7");
+        let font_dict_id = doc.add_object(Dictionary::new());
+        let mut res_dict = Dictionary::new();
+        res_dict.set("Font", Object::Reference(font_dict_id));
+        let res_id = doc.add_object(res_dict);
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Resources", Object::Reference(res_id));
+        let page_id = doc.add_object(page_dict);
+
+        let font_obj_id = doc.add_object(Dictionary::new());
+        ensure_page_font(&mut doc, page_id, "F_OCR", font_obj_id).unwrap();
+
+        let font_dict = doc.get_dictionary(font_dict_id).unwrap();
+        assert_eq!(
+            font_dict.get(b"F_OCR").unwrap().as_reference().unwrap(),
+            font_obj_id
+        );
+    }
+
+    #[test]
+    fn ensure_page_font_inline_in_ref_resources() {
+        let mut doc = Document::with_version("1.7");
+        let mut res_dict = Dictionary::new();
+        res_dict.set("Font", Object::Dictionary(Dictionary::new()));
+        let res_id = doc.add_object(res_dict);
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Resources", Object::Reference(res_id));
+        let page_id = doc.add_object(page_dict);
+
+        let font_obj_id = doc.add_object(Dictionary::new());
+        ensure_page_font(&mut doc, page_id, "F_OCR", font_obj_id).unwrap();
+
+        let res = doc.get_dictionary(res_id).unwrap();
+        let font_dict = res.get(b"Font").unwrap().as_dict().unwrap();
+        assert_eq!(
+            font_dict.get(b"F_OCR").unwrap().as_reference().unwrap(),
+            font_obj_id
+        );
+    }
+
+    #[test]
+    fn ensure_page_font_inline_in_page() {
+        let mut doc = Document::with_version("1.7");
+        let mut res_dict = Dictionary::new();
+        res_dict.set("Font", Object::Dictionary(Dictionary::new()));
+        let mut page_dict = Dictionary::new();
+        page_dict.set("Resources", Object::Dictionary(res_dict));
+        let page_id = doc.add_object(page_dict);
+
+        let font_obj_id = doc.add_object(Dictionary::new());
+        ensure_page_font(&mut doc, page_id, "F_OCR", font_obj_id).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        let res = page.get(b"Resources").unwrap().as_dict().unwrap();
+        let font_dict = res.get(b"Font").unwrap().as_dict().unwrap();
+        assert_eq!(
+            font_dict.get(b"F_OCR").unwrap().as_reference().unwrap(),
+            font_obj_id
+        );
+    }
+
+    #[test]
+    fn inject_text_layer_creates_content_and_font() {
+        let mut doc = Document::with_version("1.7");
+        let page_id = doc.add_object(Dictionary::new());
+
+        let words = vec![
+            OcrWord {
+                text: "Sample".to_string(),
+                bbox: (100.0, 100.0, 200.0, 120.0),
+                confidence: 95.0,
+            },
+            OcrWord {
+                text: "Text".to_string(),
+                bbox: (220.0, 100.0, 300.0, 120.0),
+                confidence: 90.0,
+            },
+        ];
+
+        inject_text_layer(&mut doc, page_id, &words, 612.0, 792.0, 612.0, 792.0).unwrap();
+
+        let page = doc.get_dictionary(page_id).unwrap();
+        assert!(page.get(b"Contents").is_ok());
+        assert!(page.get(b"Resources").is_ok());
+    }
+
+    #[test]
+    fn ocr_request_serde() {
+        let json = r#"{
+            "srcPath": "/path/to/file.pdf",
+            "pages": [1, 2, 3],
+            "language": "eng",
+            "dpi": 300,
+            "sourcePassword": null
+        }"#;
+        let req: OcrRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.src_path, "/path/to/file.pdf");
+        assert_eq!(req.pages, vec![1, 2, 3]);
+        assert_eq!(req.language.as_deref(), Some("eng"));
+        assert_eq!(req.dpi, Some(300));
+        assert_eq!(req.source_password, None);
+    }
+}

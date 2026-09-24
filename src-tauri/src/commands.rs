@@ -175,3 +175,81 @@ pub fn split_pdf(
         source_password.as_deref(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_info() {
+        let info = app_info();
+        assert_eq!(info.name, "limitlessPDF");
+        assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn test_export_file() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("test-export-{nanos}.txt"));
+        let path_str = path.to_string_lossy().into_owned();
+
+        let data = b"Hello from export_file test".to_vec();
+        assert!(export_file(path_str.clone(), data.clone()).is_ok());
+
+        let read_back = std::fs::read(&path).unwrap();
+        assert_eq!(read_back, data);
+        let _ = std::fs::remove_file(&path);
+
+        // Writing to invalid directory should fail
+        let invalid_path = "/nonexistent_dir_xyz_123/file.txt".to_string();
+        assert!(export_file(invalid_path, data).is_err());
+    }
+
+    #[test]
+    fn test_snapshot_pdf() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let src_path = std::env::temp_dir().join(format!("test-src-{nanos}.pdf"));
+        let content = b"%PDF-1.7 sample data".to_vec();
+        std::fs::write(&src_path, &content).unwrap();
+
+        let snapshot_res = snapshot_pdf(src_path.to_string_lossy().into_owned());
+        assert!(snapshot_res.is_ok());
+        let snap_path_str = snapshot_res.unwrap();
+        let snap_path = std::path::PathBuf::from(&snap_path_str);
+        assert!(snap_path.exists());
+
+        let snap_content = std::fs::read(&snap_path).unwrap();
+        assert_eq!(snap_content, content);
+
+        let _ = std::fs::remove_file(&src_path);
+        let _ = std::fs::remove_file(&snap_path);
+
+        // Error on nonexistent source
+        assert!(snapshot_pdf("/nonexistent-pdf-path.pdf".to_string()).is_err());
+    }
+
+    #[test]
+    fn test_read_pdf() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let src_path = std::env::temp_dir().join(format!("test-read-{nanos}.pdf"));
+        let content = b"%PDF-1.7 byte response test".to_vec();
+        std::fs::write(&src_path, &content).unwrap();
+
+        let res = read_pdf(src_path.to_string_lossy().into_owned());
+        assert!(res.is_ok());
+
+        let _ = std::fs::remove_file(&src_path);
+
+        // Error on nonexistent file
+        assert!(read_pdf("/nonexistent-pdf-path.pdf".to_string()).is_err());
+    }
+}

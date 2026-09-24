@@ -1373,4 +1373,336 @@ mod tests {
         assert_eq!(r.to, 3);
         assert_eq!(r.label, "chapter1");
     }
+
+    fn create_test_pdf_file(page_count: u32) -> (std::path::PathBuf, String) {
+        let mut doc = Document::with_version("1.7");
+        let pages_id = doc.new_object_id();
+        let mut page_ids = Vec::new();
+        for _ in 1..=page_count {
+            let mut page = Dictionary::new();
+            page.set("Type", Object::Name(b"Page".to_vec()));
+            page.set("Parent", Object::Reference(pages_id));
+            page.set(
+                "MediaBox",
+                Object::Array(vec![0.into(), 0.into(), 612.into(), 792.into()]),
+            );
+            let pid = doc.add_object(Object::Dictionary(page));
+            page_ids.push(Object::Reference(pid));
+        }
+        let mut pages_dict = Dictionary::new();
+        pages_dict.set("Type", Object::Name(b"Pages".to_vec()));
+        pages_dict.set("Count", Object::Integer(page_count as i64));
+        pages_dict.set("Kids", Object::Array(page_ids));
+        doc.set_object(pages_id, Object::Dictionary(pages_dict));
+
+        let mut catalog = Dictionary::new();
+        catalog.set("Type", Object::Name(b"Catalog".to_vec()));
+        catalog.set("Pages", Object::Reference(pages_id));
+        let catalog_id = doc.add_object(Object::Dictionary(catalog));
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("test-pdf-{nanos}.pdf"));
+        doc.save(&path).unwrap();
+        let path_str = path.to_string_lossy().into_owned();
+        (path, path_str)
+    }
+
+    #[test]
+    fn split_pdf_success_and_naming() {
+        let (src_path, src_path_str) = create_test_pdf_file(3);
+        let out_dir = std::env::temp_dir().to_string_lossy().into_owned();
+        let stem = format!(
+            "split-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+
+        let ranges = vec![
+            super::SplitRange {
+                from: 1,
+                to: 1,
+                label: "cover".to_string(),
+            },
+            super::SplitRange {
+                from: 2,
+                to: 3,
+                label: String::new(),
+            },
+        ];
+
+        let out_files = split_pdf(&src_path_str, &out_dir, &stem, &ranges, None).unwrap();
+        assert_eq!(out_files.len(), 2);
+        // Custom label creates <label>.pdf
+        assert!(out_files[0].ends_with("cover.pdf"));
+        // Empty label with range creates <stem>_pages_<from>-<to>.pdf
+        assert!(out_files[1].ends_with(&format!("{stem}_pages_2-3.pdf")));
+
+        // Verify file 1 has 1 page
+        let doc1 = Document::load(&out_files[0]).unwrap();
+        assert_eq!(doc1.get_pages().len(), 1);
+
+        // Verify file 2 has 2 pages
+        let doc2 = Document::load(&out_files[1]).unwrap();
+        assert_eq!(doc2.get_pages().len(), 2);
+
+        let _ = std::fs::remove_file(&src_path);
+        let _ = std::fs::remove_file(&out_files[0]);
+        let _ = std::fs::remove_file(&out_files[1]);
+    }
+
+    #[test]
+    fn split_pdf_validation_errors_with_file() {
+        let (src_path, src_path_str) = create_test_pdf_file(3);
+        let out_dir = std::env::temp_dir().to_string_lossy().into_owned();
+
+        // 1. from == 0
+        let r_zero = vec![super::SplitRange {
+            from: 0,
+            to: 2,
+            label: "".into(),
+        }];
+        let err_zero = split_pdf(&src_path_str, &out_dir, "stem", &r_zero, None).unwrap_err();
+        assert!(err_zero.contains("Page numbers are 1-based"));
+
+        // 2. from > to
+        let r_inverted = vec![super::SplitRange {
+            from: 3,
+            to: 1,
+            label: "".into(),
+        }];
+        let err_inv = split_pdf(&src_path_str, &out_dir, "stem", &r_inverted, None).unwrap_err();
+        assert!(err_inv.contains("page 3 is after page 1"));
+
+        // 3. to > total_pages
+        let r_out_of_bounds = vec![super::SplitRange {
+            from: 1,
+            to: 10,
+            label: "".into(),
+        }];
+        let err_bounds =
+            split_pdf(&src_path_str, &out_dir, "stem", &r_out_of_bounds, None).unwrap_err();
+        assert!(err_bounds.contains("out of range (document has 3 pages)"));
+
+        let _ = std::fs::remove_file(&src_path);
+    }
+
+    #[test]
+    fn save_reorder_rotate_and_delete_pages() {
+        let (src_path, src_path_str) = create_test_pdf_file(3);
+        let dest_path = std::env::temp_dir().join(format!(
+            "save-test-{}.pdf",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let dest_path_str = dest_path.to_string_lossy().into_owned();
+
+        // Plan: page 3 (rotation 0), then page 1 (rotation 90). Page 2 is omitted/deleted.
+        let plan = vec![
+            PlanEntry {
+                source: 0,
+                src_page: 3,
+                rotation: 0,
+            },
+            PlanEntry {
+                source: 0,
+                src_page: 1,
+                rotation: 90,
+            },
+        ];
+
+        save(
+            vec![src_path_str],
+            &dest_path_str,
+            plan,
+            vec![],
+            vec![],
+            vec![],
+            "editable".into(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let saved = Document::load(&dest_path).unwrap();
+        let pages = saved.get_pages();
+        assert_eq!(pages.len(), 2);
+
+        // Check rotation of page 2 in output
+        let p2_id = pages.get(&2).unwrap();
+        let p2_dict = saved.get_dictionary(*p2_id).unwrap();
+        assert_eq!(p2_dict.get(b"Rotate").unwrap().as_i64().unwrap(), 90);
+
+        let _ = std::fs::remove_file(&src_path);
+        let _ = std::fs::remove_file(&dest_path);
+    }
+
+    #[test]
+    fn save_with_annotations_and_flatten_mode() {
+        let (src_path, src_path_str) = create_test_pdf_file(2);
+        let dest_path = std::env::temp_dir().join(format!(
+            "anno-save-test-{}.pdf",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let dest_path_str = dest_path.to_string_lossy().into_owned();
+
+        let plan = vec![
+            PlanEntry {
+                source: 0,
+                src_page: 1,
+                rotation: 0,
+            },
+            PlanEntry {
+                source: 0,
+                src_page: 2,
+                rotation: 0,
+            },
+        ];
+
+        let annos = vec![
+            SaveAnnotation::Highlight {
+                out_index: 0,
+                color: "#ff0000".to_string(),
+                rect: RectPdf {
+                    x0: 50.0,
+                    y0: 100.0,
+                    x1: 150.0,
+                    y1: 120.0,
+                },
+            },
+            SaveAnnotation::Note {
+                out_index: 1,
+                color: "#0000ff".to_string(),
+                x: 200.0,
+                y: 300.0,
+                text: "Page 2 comment".to_string(),
+            },
+        ];
+
+        save(
+            vec![src_path_str],
+            &dest_path_str,
+            plan,
+            annos,
+            vec![],
+            vec![],
+            "flatten".into(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let saved = Document::load(&dest_path).unwrap();
+        let pages = saved.get_pages();
+        assert_eq!(pages.len(), 2);
+
+        // Verify page 1 has Annots array with 1 annotation
+        let p1_dict = saved.get_dictionary(*pages.get(&1).unwrap()).unwrap();
+        let a1 = p1_dict.get(b"Annots").unwrap().as_array().unwrap();
+        assert_eq!(a1.len(), 1);
+
+        // Verify page 2 has Annots array with 1 annotation
+        let p2_dict = saved.get_dictionary(*pages.get(&2).unwrap()).unwrap();
+        let a2 = p2_dict.get(b"Annots").unwrap().as_array().unwrap();
+        assert_eq!(a2.len(), 1);
+
+        let _ = std::fs::remove_file(&src_path);
+        let _ = std::fs::remove_file(&dest_path);
+    }
+
+    #[test]
+    fn save_merge_multiple_sources() {
+        let (src1_path, src1_str) = create_test_pdf_file(1);
+        let (src2_path, src2_str) = create_test_pdf_file(2);
+        let dest_path = std::env::temp_dir().join(format!(
+            "merge-test-{}.pdf",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let dest_str = dest_path.to_string_lossy().into_owned();
+
+        let plan = vec![
+            PlanEntry {
+                source: 0,
+                src_page: 1,
+                rotation: 0,
+            },
+            PlanEntry {
+                source: 1,
+                src_page: 2,
+                rotation: 0,
+            },
+        ];
+
+        save(
+            vec![src1_str, src2_str],
+            &dest_str,
+            plan,
+            vec![],
+            vec![],
+            vec![],
+            "editable".into(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let merged = Document::load(&dest_path).unwrap();
+        assert_eq!(merged.get_pages().len(), 2);
+
+        let _ = std::fs::remove_file(&src1_path);
+        let _ = std::fs::remove_file(&src2_path);
+        let _ = std::fs::remove_file(&dest_path);
+    }
+
+    #[test]
+    fn save_password_encryption() {
+        let (src_path, src_str) = create_test_pdf_file(1);
+        let enc_path = std::env::temp_dir().join(format!(
+            "enc-test-{}.pdf",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let enc_str = enc_path.to_string_lossy().into_owned();
+
+        let plan = vec![PlanEntry {
+            source: 0,
+            src_page: 1,
+            rotation: 0,
+        }];
+
+        // Save with password
+        save(
+            vec![src_str],
+            &enc_str,
+            plan,
+            vec![],
+            vec![],
+            vec![],
+            "editable".into(),
+            Some("password123".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let enc_doc = Document::load(&enc_path).unwrap();
+        assert!(enc_doc.is_encrypted());
+
+        let _ = std::fs::remove_file(&src_path);
+        let _ = std::fs::remove_file(&enc_path);
+    }
 }

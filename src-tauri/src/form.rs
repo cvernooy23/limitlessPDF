@@ -401,4 +401,243 @@ mod tests {
             _ => panic!("Expected literal string"),
         }
     }
+
+    #[test]
+    fn apply_values_checkbox_checked_and_unchecked() {
+        let mut doc = Document::with_version("1.7");
+
+        // Create a checkbox widget with an AP dict specifying "Yes"
+        let mut n_dict = Dictionary::new();
+        n_dict.set("Off", Object::Dictionary(Dictionary::new()));
+        n_dict.set("Yes", Object::Dictionary(Dictionary::new()));
+        let mut ap_dict = Dictionary::new();
+        ap_dict.set("N", Object::Dictionary(n_dict));
+
+        let mut field = Dictionary::new();
+        field.set("Type", Object::Name(b"Annot".to_vec()));
+        field.set("Subtype", Object::Name(b"Widget".to_vec()));
+        field.set("FT", Object::Name(b"Btn".to_vec()));
+        field.set(
+            "T",
+            Object::String(b"subscribe".to_vec(), StringFormat::Literal),
+        );
+        field.set("AP", Object::Dictionary(ap_dict));
+        let field_id = doc.add_object(Object::Dictionary(field));
+
+        let mut acroform = Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(field_id)]));
+        let acroform_id = doc.add_object(Object::Dictionary(acroform));
+
+        // Test checking the checkbox
+        let check_val = vec![FormValue {
+            field_name: "subscribe".to_string(),
+            kind: "checkbox".to_string(),
+            value: "Yes".to_string(),
+            on_state: "Yes".to_string(),
+        }];
+        apply_values(&mut doc, acroform_id, &check_val);
+
+        let fd = doc.get_dictionary(field_id).unwrap();
+        assert_eq!(fd.get(b"V").unwrap().as_name().unwrap(), b"Yes");
+        assert_eq!(fd.get(b"AS").unwrap().as_name().unwrap(), b"Yes");
+
+        // Test unchecking the checkbox
+        let uncheck_val = vec![FormValue {
+            field_name: "subscribe".to_string(),
+            kind: "checkbox".to_string(),
+            value: "".to_string(),
+            on_state: "Yes".to_string(),
+        }];
+        apply_values(&mut doc, acroform_id, &uncheck_val);
+
+        let fd = doc.get_dictionary(field_id).unwrap();
+        assert_eq!(fd.get(b"V").unwrap().as_name().unwrap(), b"Off");
+        assert_eq!(fd.get(b"AS").unwrap().as_name().unwrap(), b"Off");
+    }
+
+    #[test]
+    fn apply_values_radio_group() {
+        let mut doc = Document::with_version("1.7");
+
+        // Widget 1: ChoiceA
+        let mut n1 = Dictionary::new();
+        n1.set("Off", Object::Dictionary(Dictionary::new()));
+        n1.set("ChoiceA", Object::Dictionary(Dictionary::new()));
+        let mut ap1 = Dictionary::new();
+        ap1.set("N", Object::Dictionary(n1));
+        let mut w1 = Dictionary::new();
+        w1.set("Type", Object::Name(b"Annot".to_vec()));
+        w1.set("Subtype", Object::Name(b"Widget".to_vec()));
+        w1.set("AP", Object::Dictionary(ap1));
+        let w1_id = doc.add_object(Object::Dictionary(w1));
+
+        // Widget 2: ChoiceB
+        let mut n2 = Dictionary::new();
+        n2.set("Off", Object::Dictionary(Dictionary::new()));
+        n2.set("ChoiceB", Object::Dictionary(Dictionary::new()));
+        let mut ap2 = Dictionary::new();
+        ap2.set("N", Object::Dictionary(n2));
+        let mut w2 = Dictionary::new();
+        w2.set("Type", Object::Name(b"Annot".to_vec()));
+        w2.set("Subtype", Object::Name(b"Widget".to_vec()));
+        w2.set("AP", Object::Dictionary(ap2));
+        let w2_id = doc.add_object(Object::Dictionary(w2));
+
+        // Parent field
+        let mut field = Dictionary::new();
+        field.set("FT", Object::Name(b"Btn".to_vec()));
+        field.set("T", Object::String(b"plan".to_vec(), StringFormat::Literal));
+        field.set(
+            "Kids",
+            Object::Array(vec![Object::Reference(w1_id), Object::Reference(w2_id)]),
+        );
+        let field_id = doc.add_object(Object::Dictionary(field));
+
+        let mut acroform = Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(field_id)]));
+        let acroform_id = doc.add_object(Object::Dictionary(acroform));
+
+        // Select ChoiceB
+        let val = vec![FormValue {
+            field_name: "plan".to_string(),
+            kind: "radio".to_string(),
+            value: "ChoiceB".to_string(),
+            on_state: "ChoiceB".to_string(),
+        }];
+        apply_values(&mut doc, acroform_id, &val);
+
+        let parent = doc.get_dictionary(field_id).unwrap();
+        assert_eq!(parent.get(b"V").unwrap().as_name().unwrap(), b"ChoiceB");
+
+        let wd1 = doc.get_dictionary(w1_id).unwrap();
+        assert_eq!(wd1.get(b"AS").unwrap().as_name().unwrap(), b"Off");
+
+        let wd2 = doc.get_dictionary(w2_id).unwrap();
+        assert_eq!(wd2.get(b"AS").unwrap().as_name().unwrap(), b"ChoiceB");
+    }
+
+    #[test]
+    fn apply_values_removes_ap_for_text_and_choice() {
+        let mut doc = Document::with_version("1.7");
+
+        let mut field = Dictionary::new();
+        field.set("Type", Object::Name(b"Annot".to_vec()));
+        field.set("Subtype", Object::Name(b"Widget".to_vec()));
+        field.set("FT", Object::Name(b"Ch".to_vec()));
+        field.set(
+            "T",
+            Object::String(b"color".to_vec(), StringFormat::Literal),
+        );
+        field.set("AP", Object::Dictionary(Dictionary::new()));
+        let field_id = doc.add_object(Object::Dictionary(field));
+
+        let mut acroform = Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(field_id)]));
+        let acroform_id = doc.add_object(Object::Dictionary(acroform));
+
+        let val = vec![FormValue {
+            field_name: "color".to_string(),
+            kind: "dropdown".to_string(),
+            value: "Blue".to_string(),
+            on_state: "".to_string(),
+        }];
+        apply_values(&mut doc, acroform_id, &val);
+
+        let fd = doc.get_dictionary(field_id).unwrap();
+        assert!(fd.get(b"AP").is_err()); // AP should have been removed
+    }
+
+    #[test]
+    fn apply_values_hierarchical_field_names() {
+        let mut doc = Document::with_version("1.7");
+
+        // Child field
+        let mut child = Dictionary::new();
+        child.set("Type", Object::Name(b"Annot".to_vec()));
+        child.set("Subtype", Object::Name(b"Widget".to_vec()));
+        child.set("FT", Object::Name(b"Tx".to_vec()));
+        child.set(
+            "T",
+            Object::String(b"first".to_vec(), StringFormat::Literal),
+        );
+        let child_id = doc.add_object(Object::Dictionary(child));
+
+        // Parent field
+        let mut parent = Dictionary::new();
+        parent.set("T", Object::String(b"user".to_vec(), StringFormat::Literal));
+        parent.set("Kids", Object::Array(vec![Object::Reference(child_id)]));
+        let parent_id = doc.add_object(Object::Dictionary(parent));
+
+        let mut acroform = Dictionary::new();
+        acroform.set("Fields", Object::Array(vec![Object::Reference(parent_id)]));
+        let acroform_id = doc.add_object(Object::Dictionary(acroform));
+
+        let val = vec![FormValue {
+            field_name: "user.first".to_string(),
+            kind: "text".to_string(),
+            value: "Bob".to_string(),
+            on_state: "".to_string(),
+        }];
+        apply_values(&mut doc, acroform_id, &val);
+
+        let cd = doc.get_dictionary(child_id).unwrap();
+        match cd.get(b"V").unwrap() {
+            Object::String(bytes, _) => assert_eq!(bytes, b"Bob"),
+            _ => panic!("Expected string value"),
+        }
+    }
+
+    #[test]
+    fn widget_on_state_extraction() {
+        let mut doc = Document::with_version("1.7");
+
+        // Widget with on state
+        let mut n = Dictionary::new();
+        n.set("Off", Object::Dictionary(Dictionary::new()));
+        n.set("CustomOn", Object::Dictionary(Dictionary::new()));
+        let mut ap = Dictionary::new();
+        ap.set("N", Object::Dictionary(n));
+        let mut w1 = Dictionary::new();
+        w1.set("AP", Object::Dictionary(ap));
+        let w1_id = doc.add_object(Object::Dictionary(w1));
+
+        assert_eq!(widget_on_state(&doc, w1_id), Some("CustomOn".to_string()));
+
+        // Widget with only Off
+        let mut n_off = Dictionary::new();
+        n_off.set("Off", Object::Dictionary(Dictionary::new()));
+        let mut ap_off = Dictionary::new();
+        ap_off.set("N", Object::Dictionary(n_off));
+        let mut w2 = Dictionary::new();
+        w2.set("AP", Object::Dictionary(ap_off));
+        let w2_id = doc.add_object(Object::Dictionary(w2));
+
+        assert_eq!(widget_on_state(&doc, w2_id), None);
+
+        // Widget without AP
+        let w3_id = doc.add_object(Object::Dictionary(Dictionary::new()));
+        assert_eq!(widget_on_state(&doc, w3_id), None);
+    }
+
+    #[test]
+    fn strip_widgets_with_referenced_annots_array() {
+        let mut doc = Document::with_version("1.7");
+
+        let mut widget = Dictionary::new();
+        widget.set("Type", Object::Name(b"Annot".to_vec()));
+        widget.set("Subtype", Object::Name(b"Widget".to_vec()));
+        let wid_id = doc.add_object(Object::Dictionary(widget));
+
+        let annots_arr_id = doc.add_object(Object::Array(vec![Object::Reference(wid_id)]));
+
+        let mut page = Dictionary::new();
+        page.set("Type", Object::Name(b"Page".to_vec()));
+        page.set("Annots", Object::Reference(annots_arr_id));
+        let page_id = doc.add_object(Object::Dictionary(page));
+
+        strip_widgets(&mut doc, &[page_id]);
+
+        let pd = doc.get_dictionary(page_id).unwrap();
+        assert!(pd.get(b"Annots").is_err());
+    }
 }

@@ -183,3 +183,102 @@ fn parse_color(hex: &str) -> (u8, u8, u8) {
         (20, 20, 24)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_color_with_hash() {
+        assert_eq!(parse_color("#ff8000"), (255, 128, 0));
+        assert_eq!(parse_color("#000000"), (0, 0, 0));
+        assert_eq!(parse_color("#ffffff"), (255, 255, 255));
+    }
+
+    #[test]
+    fn parse_color_without_hash() {
+        assert_eq!(parse_color("00ff00"), (0, 255, 0));
+    }
+
+    #[test]
+    fn parse_color_short_or_invalid_fallback() {
+        assert_eq!(parse_color("#abc"), (20, 20, 24));
+        assert_eq!(parse_color(""), (20, 20, 24));
+    }
+
+    #[test]
+    fn content_edit_text_serde_and_source() {
+        let json = r##"{
+            "kind": "text",
+            "source": 3,
+            "srcPage": 2,
+            "x": 100.5,
+            "y": 200.5,
+            "size": 14.0,
+            "color": "#112233",
+            "text": "Sample text"
+        }"##;
+        let edit: ContentEdit = serde_json::from_str(json).unwrap();
+        assert_eq!(edit.source(), 3);
+        match edit {
+            ContentEdit::Text {
+                source,
+                src_page,
+                x,
+                y,
+                size,
+                color,
+                text,
+            } => {
+                assert_eq!(source, 3);
+                assert_eq!(src_page, 2);
+                assert_eq!(x, 100.5);
+                assert_eq!(y, 200.5);
+                assert_eq!(size, 14.0);
+                assert_eq!(color, "#112233");
+                assert_eq!(text, "Sample text");
+            }
+            _ => panic!("Expected ContentEdit::Text"),
+        }
+    }
+
+    #[test]
+    fn content_edit_edit_text_serde_and_source() {
+        let json = r##"{
+            "kind": "editText",
+            "source": 1,
+            "srcPage": 5,
+            "x": 50.0,
+            "y": 75.0,
+            "origText": "Old String",
+            "text": "New String"
+        }"##;
+        let edit: ContentEdit = serde_json::from_str(json).unwrap();
+        assert_eq!(edit.source(), 1);
+        match edit {
+            ContentEdit::EditText {
+                source,
+                src_page,
+                x,
+                y,
+                orig_text,
+                text,
+            } => {
+                assert_eq!(source, 1);
+                assert_eq!(src_page, 5);
+                assert_eq!(x, 50.0);
+                assert_eq!(y, 75.0);
+                assert_eq!(orig_text, "Old String");
+                assert_eq!(text, "New String");
+            }
+            _ => panic!("Expected ContentEdit::EditText"),
+        }
+    }
+
+    #[test]
+    fn apply_empty_edits_returns_sources_unchanged() {
+        let sources = vec!["doc1.pdf".to_string(), "doc2.pdf".to_string()];
+        let res = apply(&sources, &[], None).unwrap();
+        assert_eq!(res, sources);
+    }
+}

@@ -6,8 +6,10 @@ import {
   buildDocx,
   buildXlsx,
   buildExport,
+  extractDocument,
   type ExportPage,
 } from "./export";
+import type { PdfDocument } from "./pdf";
 
 const dec = new TextDecoder();
 
@@ -197,5 +199,72 @@ describe("ZIP structure", () => {
     const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
     const count = view.getUint16(zip.length - 22 + 8, true);
     expect(count).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractDocument
+// ---------------------------------------------------------------------------
+
+describe("extractDocument", () => {
+  it("extracts lines and paragraphs from document text items", async () => {
+    const mockPage1 = {
+      getTextContent: async () => ({
+        items: [
+          // Line 1: two words on the same line (y=700)
+          { str: "Hello", transform: [12, 0, 0, 12, 50, 700], width: 30, height: 12 },
+          { str: "World", transform: [12, 0, 0, 12, 90, 700], width: 35, height: 12 },
+          // Line 2: normal line break (y=684, gap=16 <= 12*1.6)
+          {
+            str: "Second line of first paragraph.",
+            transform: [12, 0, 0, 12, 50, 684],
+            width: 150,
+            height: 12,
+          },
+          // Line 3: new paragraph (y=640, gap=44 > 12*1.6)
+          {
+            str: "New paragraph here.",
+            transform: [12, 0, 0, 12, 50, 640],
+            width: 100,
+            height: 12,
+          },
+        ],
+      }),
+      cleanup: () => {},
+    };
+
+    const mockDoc = {
+      getPage: async (n: number) => {
+        if (n === 1) return mockPage1;
+        return {
+          getTextContent: async () => ({ items: [] }),
+          cleanup: () => {},
+        };
+      },
+    };
+
+    const pageList = [
+      { key: "p1", docId: "d1", srcPage: 1, rotation: 0 },
+      { key: "p2", docId: "d1", srcPage: 2, rotation: 0 },
+      { key: "p3", docId: "unknown", srcPage: 1, rotation: 0 },
+    ];
+
+    const result = await extractDocument(pageList, (id) =>
+      id === "d1" ? (mockDoc as unknown as PdfDocument) : undefined,
+    );
+
+    expect(result).toHaveLength(3);
+    // Page 1 should have 2 paragraphs
+    expect(result[0].page).toBe(1);
+    expect(result[0].paragraphs).toEqual([
+      "Hello World Second line of first paragraph.",
+      "New paragraph here.",
+    ]);
+    // Page 2 had empty items
+    expect(result[1].page).toBe(2);
+    expect(result[1].paragraphs).toEqual([]);
+    // Page 3 had unknown docId
+    expect(result[2].page).toBe(3);
+    expect(result[2].paragraphs).toEqual([]);
   });
 });
