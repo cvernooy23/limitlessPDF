@@ -3,6 +3,7 @@ mod commands;
 mod content;
 mod engine;
 mod form;
+mod insert;
 mod ocr;
 mod signature;
 
@@ -30,6 +31,8 @@ pub fn run() {
             commands::run_ocr,
             commands::check_signatures,
             commands::split_pdf,
+            commands::create_blank_pdf,
+            commands::create_image_pdf,
         ])
         .run(tauri::generate_context!())
         .expect("error while running limitlessPDF");

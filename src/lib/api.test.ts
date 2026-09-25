@@ -17,6 +17,9 @@ import {
   checkSignatures,
   pickFolder,
   splitPdf,
+  pickImage,
+  createBlankPdf,
+  createImagePdf,
 } from "./api";
 
 // Mock Tauri core and plugins
@@ -391,6 +394,69 @@ describe("api.ts", () => {
         sourcePassword: "pw",
       });
       expect(res).toEqual(["/out/doc_p1.pdf", "/out/doc_cover.pdf"]);
+    });
+  });
+
+  describe("pickImage", () => {
+    it("calls open dialog with image filters and returns path", async () => {
+      mockOpen.mockResolvedValueOnce("/photos/cat.png");
+      const res = await pickImage();
+      expect(mockOpen).toHaveBeenCalledWith({
+        multiple: false,
+        directory: false,
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "tif"],
+          },
+        ],
+      });
+      expect(res).toBe("/photos/cat.png");
+    });
+
+    it("returns null when user cancels", async () => {
+      mockOpen.mockResolvedValueOnce(null);
+      const res = await pickImage();
+      expect(res).toBeNull();
+    });
+
+    it("returns null if open returns an array", async () => {
+      mockOpen.mockResolvedValueOnce(["/a.png", "/b.png"]);
+      const res = await pickImage();
+      expect(res).toBeNull();
+    });
+  });
+
+  describe("createBlankPdf", () => {
+    it("invokes create_blank_pdf with default Letter dimensions", async () => {
+      mockInvoke.mockResolvedValueOnce("/tmp/blank-123.pdf");
+      const res = await createBlankPdf();
+      expect(mockInvoke).toHaveBeenCalledWith("create_blank_pdf", {
+        width: 612,
+        height: 792,
+      });
+      expect(res).toBe("/tmp/blank-123.pdf");
+    });
+
+    it("invokes create_blank_pdf with custom dimensions", async () => {
+      mockInvoke.mockResolvedValueOnce("/tmp/blank-456.pdf");
+      const res = await createBlankPdf(595, 842);
+      expect(mockInvoke).toHaveBeenCalledWith("create_blank_pdf", {
+        width: 595,
+        height: 842,
+      });
+      expect(res).toBe("/tmp/blank-456.pdf");
+    });
+  });
+
+  describe("createImagePdf", () => {
+    it("invokes create_image_pdf with imagePath", async () => {
+      mockInvoke.mockResolvedValueOnce("/tmp/image-789.pdf");
+      const res = await createImagePdf("/photos/cat.png");
+      expect(mockInvoke).toHaveBeenCalledWith("create_image_pdf", {
+        imagePath: "/photos/cat.png",
+      });
+      expect(res).toBe("/tmp/image-789.pdf");
     });
   });
 });

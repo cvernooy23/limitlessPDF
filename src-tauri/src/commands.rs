@@ -176,6 +176,22 @@ pub fn split_pdf(
     )
 }
 
+// -- Insert pages --------------------------------------------------------
+
+/// Create a blank single-page PDF with the given dimensions (in points).
+/// Returns the path to the temporary PDF file.
+#[tauri::command]
+pub fn create_blank_pdf(width: f64, height: f64) -> Result<String, String> {
+    crate::insert::create_blank_pdf(width, height)
+}
+
+/// Create a single-page PDF containing the given image, sized to fit.
+/// Returns the path to the temporary PDF file.
+#[tauri::command]
+pub fn create_image_pdf(image_path: String) -> Result<String, String> {
+    crate::insert::create_image_pdf(&image_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,5 +267,25 @@ mod tests {
 
         // Error on nonexistent file
         assert!(read_pdf("/nonexistent-pdf-path.pdf".to_string()).is_err());
+    }
+    #[test]
+    fn test_create_blank_pdf() {
+        let result = create_blank_pdf(612.0, 792.0);
+        assert!(result.is_ok(), "Failed: {:?}", result.err());
+        let path = result.unwrap();
+        assert!(std::path::Path::new(&path).exists());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_create_blank_pdf_invalid() {
+        assert!(create_blank_pdf(0.0, 100.0).is_err());
+        assert!(create_blank_pdf(100.0, -5.0).is_err());
+    }
+
+    #[test]
+    fn test_create_image_pdf_nonexistent() {
+        let result = create_image_pdf("/no/such/image.png".to_string());
+        assert!(result.is_err());
     }
 }

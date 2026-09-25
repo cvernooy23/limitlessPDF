@@ -322,7 +322,7 @@ mod tests {
 
         // Check NeedAppearances was set
         let af = doc.get_dictionary(acroform_id).unwrap();
-        assert_eq!(af.get(b"NeedAppearances").unwrap().as_bool().unwrap(), true);
+        assert!(af.get(b"NeedAppearances").unwrap().as_bool().unwrap());
     }
 
     #[test]

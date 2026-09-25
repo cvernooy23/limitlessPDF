@@ -30,6 +30,9 @@ lopdf = "0.41"
 # Matches the major version lopdf already pulls in.
 getrandom = "0.4"
 
+# Image format decoding for the insert-image-page feature.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp", "tiff"] }
+
 # PDF engine. pdfium-render loads the PDFium dynamic library at runtime, so the
 # crate compiles even when the .dll/.dylib/.so isn't present yet — we surface a
 # friendly "not found" status instead of failing the build.
