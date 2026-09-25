@@ -22,6 +22,10 @@ editing/export.
 - **Annotate** — highlight, freehand draw, sticky notes, comments panel
 - **Edit text** — click-to-edit existing text runs, add new text boxes
 - **Fill forms** — detect and fill AcroForm fields (text, checkbox, radio, select)
+- **Insert** — add pages from other PDFs or insert images as new pages
+- **Digital signatures** — sign documents with hand-drawn or uploaded signatures, verify existing signatures
+- **OCR** — extract text from scanned/image-based PDFs
+- **Undo / redo** — full operation history across all editing actions
 - **Merge & assemble** — open multiple PDFs and combine pages
 - **Export** — save as annotated PDF with optional AES-128 encryption; export to TXT, Markdown, HTML, DOCX, XLSX
 - **Glassmorphism UI** — frameless transparent window with native OS blur (Mica on Windows, vibrancy on macOS)
@@ -43,7 +47,7 @@ editing/export.
 
 - **Node** >= 22 (LTS) and **npm**
 - **Rust** (stable) via [rustup](https://rustup.rs)
-- Tauri OS dependencies -- see the
+- Tauri OS dependencies — see the
   [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
   (Windows: WebView2 + MSVC build tools; macOS: Xcode CLT; Linux: WebKitGTK).
 
@@ -51,8 +55,15 @@ editing/export.
 
 ```bash
 npm install
+npm run get-pdfium   # downloads the correct PDFium binary for your OS/arch
 npm run app:dev      # launches the Tauri window with hot-reload
 ```
+
+`get-pdfium` auto-detects your platform and CPU architecture, downloads the
+matching prebuilt PDFium dynamic library from
+[`bblanchon/pdfium-binaries`](https://github.com/bblanchon/pdfium-binaries),
+and places it in both `src-tauri/` (for `tauri dev`) and `src-tauri/resources/`
+(for bundled builds). You only need to run it once.
 
 Frontend only (in a browser, backend disabled):
 
@@ -66,11 +77,40 @@ npm run dev
 npm run app:build    # produces installers for the current OS
 ```
 
+The build step runs `get-pdfium` automatically, so release builds always ship
+the PDFium library next to the executable — no manual download needed for end
+users.
+
 Outputs land in `src-tauri/target/release/bundle/`:
 
 - **Windows:** `.msi` + NSIS `.exe`
 - **macOS:** `.app` / `.dmg`
 - **Linux:** `.AppImage`, `.deb`, `.rpm`
+
+## CI / Code Quality
+
+Every push and pull request runs a comprehensive CI pipeline:
+
+**Linting & formatting**
+- `cargo fmt --check` — Rust formatting
+- `cargo clippy -D warnings` — Rust lints (warnings are errors)
+- `eslint` — TypeScript/Svelte linting
+- `prettier --check` — code formatting for all frontend files and config
+- `svelte-check` — Svelte component type checking
+- `tsc --noEmit` — full TypeScript type checking
+
+**Testing**
+- `cargo test` — Rust unit tests
+- `vitest` — frontend unit tests
+
+**Security scanning**
+- **CodeQL** — GitHub's semantic code analysis for JavaScript/TypeScript, integrated with GitHub Security tab
+- **ASH (Automated Security Helper)** — AWS security scanner covering secrets detection (detect-secrets), dependency vulnerabilities, and static analysis; SARIF results uploaded to GitHub code scanning
+
+**Release builds**
+- Cross-platform matrix build (Windows, macOS x64/arm64, Linux) on every tagged release
+- Nightly builds from the `latest` branch (dispatched daily at 06:00 UTC)
+- Version automatically injected from git tags at build time
 
 ## Icons
 
@@ -81,61 +121,48 @@ To regenerate the full platform set from the master:
 npm run tauri icon src-tauri/icons/source.png
 ```
 
-## PDFium binaries
-
-`pdfium-render` loads the PDFium dynamic library **at runtime** -- it is _not_
-linked at build time, so the project compiles without it. The status badge in
-the app reads "PDFium not found" until you provide the library.
-
-**Easiest -- run the helper script** (auto-detects your OS + CPU, downloads the
-right binary, and places it in `src-tauri/`):
-
-```bash
-npm run get-pdfium
-```
-
-Then start the app (`npm run app:dev`) and the badge should read "PDFium ready".
-
-The script writes the library to two places: `src-tauri/` (used by `tauri dev`)
-and `src-tauri/resources/` (bundled into installers). **`npm run app:build`
-runs this automatically**, so release builds ship PDFium next to the executable
-and the engine finds it via the executable/resource directory at runtime -- no
-manual step for end users.
-
-**Manual alternative:** download a prebuilt PDFium for your platform from the
-[`pdfium-binaries` releases](https://github.com/bblanchon/pdfium-binaries/releases)
-and place the library (`pdfium.dll` / `libpdfium.dylib` / `libpdfium.so`) next to
-the executable, or anywhere on the system library path. The release/packaging
-step bundles the correct binary per platform.
-
 ## Project layout
 
 ```
 limitlessPDF/
-+-- src/                   # Svelte + TS frontend
-|  +-- lib/                # UI components, pdf.js wrapper, annotation model,
-|  |                       # IPC wrappers, export pipeline
-|  +-- app.css             # Tailwind v4 + glass design tokens
-|  +-- App.svelte          # Main application shell
-|  +-- main.ts
-+-- src-tauri/             # Rust core
-|  +-- src/
-|  |  +-- main.rs
-|  |  +-- lib.rs           # builder + window vibrancy
-|  |  +-- commands.rs      # IPC surface
-|  |  +-- engine/mod.rs    # PDFium binding (probe, render, edit)
-|  |  +-- annotate.rs      # annotation + save pipeline
-|  |  +-- content.rs       # text content editing via PDFium
-|  |  +-- form.rs          # AcroForm read/write
-|  +-- capabilities/       # Tauri 2 permissions
-|  +-- icons/
-|  +-- tauri.conf.json
-|  +-- Cargo.toml
-+-- scripts/get-pdfium.mjs # PDFium downloader
-+-- .github/workflows/build.yml
-+-- package.json
+├── src/                       # Svelte + TS frontend
+│   ├── lib/                   # UI components, pdf.js wrapper, annotation model,
+│   │                          # IPC wrappers, export pipeline
+│   ├── app.css                # Tailwind v4 + glass design tokens
+│   ├── App.svelte             # Main application shell
+│   └── main.ts
+├── src-tauri/                 # Rust core
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── lib.rs             # builder + window vibrancy
+│   │   ├── commands.rs        # IPC surface
+│   │   ├── engine/mod.rs      # PDFium binding (probe, render, edit)
+│   │   ├── annotate.rs        # annotation + save pipeline
+│   │   ├── content.rs         # text content editing via PDFium
+│   │   ├── digsig.rs          # digital signature verification
+│   │   ├── form.rs            # AcroForm read/write
+│   │   ├── insert.rs          # page/image insertion
+│   │   ├── ocr.rs             # OCR text extraction
+│   │   └── signature.rs       # signature placement
+│   ├── resources/             # PDFium binary + license (bundled into builds)
+│   ├── capabilities/          # Tauri 2 permissions
+│   ├── icons/
+│   ├── tauri.conf.json
+│   └── Cargo.toml
+├── scripts/get-pdfium.mjs     # PDFium downloader
+├── .github/workflows/
+│   ├── ci.yml                 # lint, test, security scans
+│   ├── build.yml              # release builds
+│   └── nightly.yml            # nightly builds
+├── LICENSE                    # MIT
+├── THIRD-PARTY-NOTICES        # third-party license texts
+└── package.json
 ```
 
 ## License
 
-MIT
+[MIT](LICENSE) — Copyright (c) 2024 Christopher Vernooy
+
+This project uses PDFium (BSD 3-Clause / Apache 2.0), pdf.js (Apache 2.0), and
+other open-source libraries. See [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES) for
+full license texts.
