@@ -44,7 +44,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/*"],
+    "resources": [
+      "resources/*"
+    ],
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"
@@ -56,6 +58,10 @@
     "linux": {
       "appimage": {
         "bundleMediaFramework": false
+      },
+      "rpm": {
+        "epoch": 0,
+        "release": "1"
       }
     }
   }
