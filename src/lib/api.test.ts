@@ -20,6 +20,9 @@ import {
   pickImage,
   createBlankPdf,
   createImagePdf,
+  listCertificates,
+  signPdf,
+  createStampPdf,
 } from "./api";
 
 // Mock Tauri core and plugins
@@ -457,6 +460,95 @@ describe("api.ts", () => {
         imagePath: "/photos/cat.png",
       });
       expect(res).toBe("/tmp/image-789.pdf");
+    });
+  });
+
+  describe("listCertificates", () => {
+    it("invokes list_certificates and returns cert array", async () => {
+      const certs = [
+        {
+          thumbprint: "AABB11",
+          subject: "CN=Test User",
+          issuer: "CN=Test CA",
+          hasPrivateKey: true,
+        },
+      ];
+      mockInvoke.mockResolvedValueOnce(certs);
+      const res = await listCertificates();
+      expect(mockInvoke).toHaveBeenCalledWith("list_certificates");
+      expect(res).toEqual(certs);
+    });
+
+    it("returns empty array when no certs exist", async () => {
+      mockInvoke.mockResolvedValueOnce([]);
+      const res = await listCertificates();
+      expect(res).toEqual([]);
+    });
+  });
+
+  describe("signPdf", () => {
+    it("invokes sign_pdf with all parameters", async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+      await signPdf(
+        "/src.pdf",
+        "/dest.pdf",
+        1,
+        { x: 36, y: 36, width: 200, height: 50 },
+        "AABB11",
+        "Signature1",
+        "Approval",
+        "Office",
+        "John Doe",
+        "secret",
+      );
+      expect(mockInvoke).toHaveBeenCalledWith("sign_pdf", {
+        srcPath: "/src.pdf",
+        destPath: "/dest.pdf",
+        page: 1,
+        rect: { x: 36, y: 36, width: 200, height: 50 },
+        thumbprint: "AABB11",
+        fieldName: "Signature1",
+        reason: "Approval",
+        location: "Office",
+        signerName: "John Doe",
+        sourcePassword: "secret",
+      });
+    });
+
+    it("passes null for optional parameters when omitted", async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+      await signPdf(
+        "/src.pdf",
+        "/dest.pdf",
+        2,
+        { x: 0, y: 0, width: 100, height: 30 },
+        "CCDD22",
+        "Sig2",
+      );
+      expect(mockInvoke).toHaveBeenCalledWith("sign_pdf", {
+        srcPath: "/src.pdf",
+        destPath: "/dest.pdf",
+        page: 2,
+        rect: { x: 0, y: 0, width: 100, height: 30 },
+        thumbprint: "CCDD22",
+        fieldName: "Sig2",
+        reason: null,
+        location: null,
+        signerName: null,
+        sourcePassword: null,
+      });
+    });
+  });
+
+  describe("createStampPdf", () => {
+    it("invokes create_stamp_pdf with PNG byte array and returns path", async () => {
+      mockInvoke.mockResolvedValueOnce("/tmp/stamp-abc.pdf");
+      const pngBytes = [137, 80, 78, 71, 13, 10, 26, 10];
+      const res = await createStampPdf(pngBytes);
+      expect(mockInvoke).toHaveBeenCalledWith("create_stamp_pdf", {
+        pngBytes,
+      });
+      expect(res).toBe("/tmp/stamp-abc.pdf");
     });
   });
 });

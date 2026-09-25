@@ -8,6 +8,7 @@
   import CommentsPanel from "./lib/CommentsPanel.svelte";
   import OcrPanel from "./lib/OcrPanel.svelte";
   import SignaturePanel from "./lib/SignaturePanel.svelte";
+  import SignDialog from "./lib/SignDialog.svelte";
   import {
     ANNOTATION_COLORS,
     type Annotation,
@@ -95,6 +96,7 @@
   let commentsOpen = $state(false);
   let ocrOpen = $state(false);
   let sigOpen = $state(false);
+  let signOpen = $state(false);
 
   // Content edits (PDFium): new text objects added to pages.
   let textBoxes = $state<TextBox[]>([]);
@@ -530,6 +532,28 @@
       saveMsg = `Insert failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
       loading = false;
+    }
+  }
+
+  async function handleStampCreated(tempPath: string) {
+    try {
+      const bytes = await readPdf(tempPath);
+      const loaded = await loadPdf(bytes);
+      const id = newDocId();
+      docs.set(id, loaded.doc);
+      srcPaths.set(id, tempPath);
+      const item: PageItem = {
+        key: newPageKey(),
+        docId: id,
+        srcPage: 1,
+        rotation: 0,
+      };
+      pushUndo();
+      pageList = [...pageList, item];
+      dirty = true;
+      saveMsg = "Inserted typed signature";
+    } catch (e) {
+      saveMsg = `Stamp failed: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
 
@@ -1110,6 +1134,15 @@
         >
           Redo
         </button>
+        <div class="mx-1 h-5 w-px bg-white/10"></div>
+        <button
+          class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          onclick={() => (signOpen = !signOpen)}
+          disabled={saving || loading || !doc}
+          title="Sign document — add a digital or typed signature"
+        >
+          Sign
+        </button>
         <button
           class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
           class:comments-on={commentsOpen}
@@ -1357,6 +1390,16 @@
       </div>
     {/if}
   </main>
+
+  {#if doc && signOpen && filePath}
+    <SignDialog
+      {filePath}
+      sourcePassword={openedPassword ?? undefined}
+      totalPages={pageList.length}
+      onClose={() => (signOpen = false)}
+      onStampCreated={handleStampCreated}
+    />
+  {/if}
 
   <footer class="flex items-center justify-between px-2 text-[11px] text-[var(--color-ink-dim)]">
     <span>

@@ -1,6 +1,7 @@
 mod annotate;
 mod commands;
 mod content;
+mod digsig;
 mod engine;
 mod form;
 mod insert;
@@ -33,6 +34,9 @@ pub fn run() {
             commands::split_pdf,
             commands::create_blank_pdf,
             commands::create_image_pdf,
+            commands::list_certificates,
+            commands::sign_pdf,
+            commands::create_stamp_pdf,
         ])
         .run(tauri::generate_context!())
         .expect("error while running limitlessPDF");
