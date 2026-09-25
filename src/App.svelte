@@ -41,6 +41,9 @@
     inTauri,
     splitPdf,
     pickFolder,
+    pickImage,
+    createBlankPdf,
+    createImagePdf,
     type EngineStatus,
     type SplitRange,
   } from "./lib/api";
@@ -434,6 +437,60 @@
       pageList = [...pageList, ...added];
       dirty = true;
       saveMsg = `Inserted ${loaded.numPages} page${loaded.numPages === 1 ? "" : "s"} from ${baseName(path)}`;
+    } catch (e) {
+      saveMsg = `Insert failed: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function insertBlankPage() {
+    if (!inTauri() || !doc) return;
+    loading = true;
+    try {
+      const path = await createBlankPdf();
+      const bytes = await readPdf(path);
+      const loaded = await loadPdf(bytes);
+      const id = newDocId();
+      docs.set(id, loaded.doc);
+      srcPaths.set(id, path);
+      const item: PageItem = {
+        key: newPageKey(),
+        docId: id,
+        srcPage: 1,
+        rotation: 0,
+      };
+      pageList = [...pageList, item];
+      dirty = true;
+      saveMsg = "Inserted blank page";
+    } catch (e) {
+      saveMsg = `Insert failed: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function insertImagePage() {
+    if (!inTauri() || !doc) return;
+    const imgPath = await pickImage();
+    if (!imgPath) return;
+    loading = true;
+    try {
+      const path = await createImagePdf(imgPath);
+      const bytes = await readPdf(path);
+      const loaded = await loadPdf(bytes);
+      const id = newDocId();
+      docs.set(id, loaded.doc);
+      srcPaths.set(id, path);
+      const item: PageItem = {
+        key: newPageKey(),
+        docId: id,
+        srcPage: 1,
+        rotation: 0,
+      };
+      pageList = [...pageList, item];
+      dirty = true;
+      saveMsg = `Inserted image page from ${baseName(imgPath)}`;
     } catch (e) {
       saveMsg = `Insert failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
@@ -937,6 +994,22 @@
           title="Insert pages from another PDF (appended; drag to reposition)"
         >
           Insert PDF
+        </button>
+        <button
+          class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          onclick={insertBlankPage}
+          disabled={saving || loading || !doc}
+          title="Insert a blank page at the end"
+        >
+          Blank Page
+        </button>
+        <button
+          class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          onclick={insertImagePage}
+          disabled={saving || loading || !doc}
+          title="Insert an image as a new page"
+        >
+          Image Page
         </button>
         <button
           class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"

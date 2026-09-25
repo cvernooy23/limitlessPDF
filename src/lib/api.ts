@@ -227,3 +227,30 @@ export async function splitPdf(
     sourcePassword: sourcePassword ?? null,
   });
 }
+
+// -- Insert pages/images -------------------------------------------------
+
+/** Open a native file picker for images. Returns the chosen path, or null. */
+export async function pickImage(): Promise<string | null> {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [
+      {
+        name: "Images",
+        extensions: ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "tif"],
+      },
+    ],
+  });
+  return typeof selected === "string" ? selected : null;
+}
+
+/** Create a blank single-page PDF (US Letter by default). Returns the temp path. */
+export async function createBlankPdf(width: number = 612, height: number = 792): Promise<string> {
+  return invoke<string>("create_blank_pdf", { width, height });
+}
+
+/** Create a single-page PDF wrapping the given image. Returns the temp path. */
+export async function createImagePdf(imagePath: string): Promise<string> {
+  return invoke<string>("create_image_pdf", { imagePath });
+}
