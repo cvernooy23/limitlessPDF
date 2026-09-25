@@ -75,40 +75,31 @@ jobs:
             mkdir -p portable
             cp "$APPIMAGE" "portable/limitlessPDF"
             chmod +x "portable/limitlessPDF"
-            cat > portable/README.txt << 'HEREDOC'
-limitlessPDF — Portable Linux Build
-
-Run directly:  ./limitlessPDF
-No installation required. Needs WebKitGTK 4.1 on the host system.
-
-To install per-user instead, run:
-  ./install-user.sh
-This places the app in ~/.local and creates a desktop entry.
-HEREDOC
-            cat > portable/install-user.sh << 'SCRIPT'
-#!/bin/sh
-set -e
-PREFIX="$HOME/.local"
-mkdir -p "$PREFIX/bin" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor/128x128/apps"
-cp "$(dirname "$0")/limitlessPDF" "$PREFIX/bin/limitless-pdf"
-chmod +x "$PREFIX/bin/limitless-pdf"
-if [ -f "$(dirname "$0")/../src-tauri/icons/128x128.png" ]; then
-  cp "$(dirname "$0")/../src-tauri/icons/128x128.png" "$PREFIX/share/icons/hicolor/128x128/apps/limitless-pdf.png"
-fi
-cat > "$PREFIX/share/applications/limitless-pdf.desktop" << EOF
-[Desktop Entry]
-Name=limitlessPDF
-Comment=Modern glassy PDF reader and editor
-Exec=$PREFIX/bin/limitless-pdf %F
-Icon=limitless-pdf
-Type=Application
-Categories=Office;Viewer;
-MimeType=application/pdf;
-Terminal=false
-EOF
-echo "Installed to $PREFIX/bin/limitless-pdf"
-echo "Desktop entry created. Log out and back in, or run: update-desktop-database $PREFIX/share/applications"
-SCRIPT
+            printf '%s\n' \
+              "limitlessPDF — Portable Linux Build" \
+              "" \
+              "Run directly:  ./limitlessPDF" \
+              "No installation required. Needs WebKitGTK 4.1 on the host system." \
+              "" \
+              "To install per-user instead, run:" \
+              "  ./install-user.sh" \
+              "This places the app in ~/.local and creates a desktop entry." \
+              > portable/README.txt
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'set -e' \
+              'PREFIX="$HOME/.local"' \
+              'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"' \
+              'mkdir -p "$PREFIX/bin" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor/128x128/apps"' \
+              'cp "$SCRIPT_DIR/limitlessPDF" "$PREFIX/bin/limitless-pdf"' \
+              'chmod +x "$PREFIX/bin/limitless-pdf"' \
+              'if [ -f "$SCRIPT_DIR/../src-tauri/icons/128x128.png" ]; then' \
+              '  cp "$SCRIPT_DIR/../src-tauri/icons/128x128.png" "$PREFIX/share/icons/hicolor/128x128/apps/limitless-pdf.png"' \
+              'fi' \
+              'printf "%s\n" "[Desktop Entry]" "Name=limitlessPDF" "Comment=Modern glassy PDF reader and editor" "Exec=$PREFIX/bin/limitless-pdf %F" "Icon=limitless-pdf" "Type=Application" "Categories=Office;Viewer;" "MimeType=application/pdf;" "Terminal=false" > "$PREFIX/share/applications/limitless-pdf.desktop"' \
+              'echo "Installed to $PREFIX/bin/limitless-pdf"' \
+              'echo "Desktop entry created. Log out and back in, or run: update-desktop-database $PREFIX/share/applications"' \
+              > portable/install-user.sh
             chmod +x portable/install-user.sh
             tar -czf "limitlessPDF-${VERSION}-linux-x86_64-portable.tar.gz" -C portable .
             rm -rf portable
@@ -122,12 +113,12 @@ SCRIPT
           if [ -n "$APP_BUNDLE" ]; then
             mkdir -p portable
             cp -R "$APP_BUNDLE" portable/
-            cat > portable/README.txt << 'HEREDOC'
-limitlessPDF — Portable macOS Build
-
-Drag limitlessPDF.app to any folder and double-click to run.
-No installation required. To install per-user, drag to ~/Applications.
-HEREDOC
+            printf '%s\n' \
+              "limitlessPDF — Portable macOS Build" \
+              "" \
+              "Drag limitlessPDF.app to any folder and double-click to run." \
+              "No installation required. To install per-user, drag to ~/Applications." \
+              > portable/README.txt
             cd portable
             zip -r "../limitlessPDF-${VERSION}-macos-universal-portable.zip" .
             cd ..
@@ -143,15 +134,10 @@ HEREDOC
           if ($exe) {
             New-Item -ItemType Directory -Force portable | Out-Null
             Copy-Item $exe.FullName portable/
-            # Include WebView2 bootstrapper if present
             $wv2 = Get-ChildItem -Recurse src-tauri/target/release/bundle -Filter "MicrosoftEdgeWebview2Setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($wv2) { Copy-Item $wv2.FullName portable/ }
-            @"
-limitlessPDF - Portable Windows Build
-
-Run limitlessPDF.exe directly. No installation required.
-If WebView2 is not installed, run MicrosoftEdgeWebview2Setup.exe first.
-"@ | Out-File -Encoding utf8 portable/README.txt
+            $readme = "limitlessPDF - Portable Windows Build`r`n`r`nRun limitlessPDF.exe directly. No installation required.`r`nIf WebView2 is not installed, run MicrosoftEdgeWebview2Setup.exe first."
+            [System.IO.File]::WriteAllText("portable/README.txt", $readme)
             Compress-Archive -Path portable/* -DestinationPath "limitlessPDF-${version}-windows-x86_64-portable.zip"
             Remove-Item -Recurse -Force portable
           }
@@ -183,39 +169,30 @@ If WebView2 is not installed, run MicrosoftEdgeWebview2Setup.exe first.
             cp "src-tauri/icons/128x128.png" "$PKG_ROOT/usr/share/icons/hicolor/128x128/apps/limitless-pdf.png"
           fi
 
-          cat > "$PKG_ROOT/usr/share/applications/limitless-pdf.desktop" << EOF
-          [Desktop Entry]
-          Name=limitlessPDF
-          Comment=Modern glassy PDF reader and editor
-          Exec=/usr/bin/limitless-pdf %F
-          Icon=limitless-pdf
-          Type=Application
-          Categories=Office;Viewer;
-          MimeType=application/pdf;
-          Terminal=false
-          EOF
-          # Remove leading whitespace from desktop entry
-          sed -i 's/^          //' "$PKG_ROOT/usr/share/applications/limitless-pdf.desktop"
+          printf '%s\n' \
+            "[Desktop Entry]" \
+            "Name=limitlessPDF" \
+            "Comment=Modern glassy PDF reader and editor" \
+            "Exec=/usr/bin/limitless-pdf %F" \
+            "Icon=limitless-pdf" \
+            "Type=Application" \
+            "Categories=Office;Viewer;" \
+            "MimeType=application/pdf;" \
+            "Terminal=false" \
+            > "$PKG_ROOT/usr/share/applications/limitless-pdf.desktop"
 
-          mkdir -p "$PKG_ROOT/.PKGINFO"
-          cat > "$PKG_ROOT/.PKGINFO/PKGINFO" << EOF
-          pkgname = limitless-pdf
-          pkgver = ${VERSION}-1
-          pkgdesc = Modern glassy PDF reader and editor
-          url = https://github.com/cvernooy23/limitlessPDF
-          arch = x86_64
-          license = MIT
-          depend = webkit2gtk-4.1
-          depend = gtk3
-          EOF
-          sed -i 's/^          //' "$PKG_ROOT/.PKGINFO/PKGINFO"
+          printf '%s\n' \
+            "pkgname = limitless-pdf" \
+            "pkgver = ${VERSION}-1" \
+            "pkgdesc = Modern glassy PDF reader and editor" \
+            "url = https://github.com/cvernooy23/limitlessPDF" \
+            "arch = x86_64" \
+            "license = MIT" \
+            "depend = webkit2gtk-4.1" \
+            "depend = gtk3" \
+            > "$PKG_ROOT/.PKGINFO"
 
-          # Build the .pkg.tar.zst
           cd "$PKG_ROOT"
-          # Create .PKGINFO at root level
-          mv .PKGINFO/PKGINFO .PKGINFO_file
-          rm -rf .PKGINFO
-          mv .PKGINFO_file .PKGINFO
           tar --zstd -cf "../../../limitless-pdf-${VERSION}-1-x86_64.pkg.tar.zst" \
             .PKGINFO usr/
           cd ../../..
@@ -248,33 +225,31 @@ If WebView2 is not installed, run MicrosoftEdgeWebview2Setup.exe first.
             cp "src-tauri/icons/128x128.png" "$SLACK_ROOT/usr/share/icons/hicolor/128x128/apps/limitless-pdf.png"
           fi
 
-          cat > "$SLACK_ROOT/usr/share/applications/limitless-pdf.desktop" << EOF
-          [Desktop Entry]
-          Name=limitlessPDF
-          Comment=Modern glassy PDF reader and editor
-          Exec=/usr/bin/limitless-pdf %F
-          Icon=limitless-pdf
-          Type=Application
-          Categories=Office;Viewer;
-          MimeType=application/pdf;
-          Terminal=false
-          EOF
-          sed -i 's/^          //' "$SLACK_ROOT/usr/share/applications/limitless-pdf.desktop"
+          printf '%s\n' \
+            "[Desktop Entry]" \
+            "Name=limitlessPDF" \
+            "Comment=Modern glassy PDF reader and editor" \
+            "Exec=/usr/bin/limitless-pdf %F" \
+            "Icon=limitless-pdf" \
+            "Type=Application" \
+            "Categories=Office;Viewer;" \
+            "MimeType=application/pdf;" \
+            "Terminal=false" \
+            > "$SLACK_ROOT/usr/share/applications/limitless-pdf.desktop"
 
-          cat > "$SLACK_ROOT/install/slack-desc" << EOF
-          limitless-pdf: limitlessPDF
-          limitless-pdf:
-          limitless-pdf: Modern glassy PDF reader and editor.
-          limitless-pdf: A fast, cross-platform PDF reader and editor with
-          limitless-pdf: a modern glassy interface built with Tauri.
-          limitless-pdf:
-          limitless-pdf: Homepage: https://github.com/cvernooy23/limitlessPDF
-          limitless-pdf:
-          limitless-pdf:
-          limitless-pdf:
-          limitless-pdf:
-          EOF
-          sed -i 's/^          //' "$SLACK_ROOT/install/slack-desc"
+          printf '%s\n' \
+            "limitless-pdf: limitlessPDF" \
+            "limitless-pdf:" \
+            "limitless-pdf: Modern glassy PDF reader and editor." \
+            "limitless-pdf: A fast, cross-platform PDF reader and editor with" \
+            "limitless-pdf: a modern glassy interface built with Tauri." \
+            "limitless-pdf:" \
+            "limitless-pdf: Homepage: https://github.com/cvernooy23/limitlessPDF" \
+            "limitless-pdf:" \
+            "limitless-pdf:" \
+            "limitless-pdf:" \
+            "limitless-pdf:" \
+            > "$SLACK_ROOT/install/slack-desc"
 
           cd "$SLACK_ROOT"
           tar -cJf "../../limitless-pdf-${VERSION}-x86_64-1.txz" .
