@@ -1526,18 +1526,26 @@ mod tests {
 
     // ── list_certificates (non-Windows) ─────────────────────────────────
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     #[test]
-    fn list_certificates_returns_error_on_non_windows() {
+    fn list_certificates_returns_error_on_unsupported() {
         let err = list_certificates().unwrap_err();
-        assert!(err.contains("Windows"));
+        assert!(err.contains("not available"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn list_certificates_returns_ok_on_linux() {
+        // On CI without certs installed, should return Ok (possibly empty)
+        let result = list_certificates();
+        assert!(result.is_ok());
     }
 
     // ── sign_pdf (non-Windows) ──────────────────────────────────────────
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     #[test]
-    fn sign_pdf_returns_error_on_non_windows() {
+    fn sign_pdf_returns_error_on_unsupported() {
         let rect = SignRect {
             x: 0.0,
             y: 0.0,
@@ -1548,7 +1556,27 @@ mod tests {
             "test.pdf", "out.pdf", 1, &rect, "aabbccdd", "Sig1", None, None, None, None,
         )
         .unwrap_err();
-        assert!(err.contains("Windows"));
+        assert!(err.contains("not available"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn sign_pdf_returns_error_with_bad_input_on_linux() {
+        let rect = SignRect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 50.0,
+        };
+        // Should fail because test.pdf doesn't exist, not because of platform
+        let err = sign_pdf(
+            "test.pdf", "out.pdf", 1, &rect, "aabbccdd", "Sig1", None, None, None, None,
+        )
+        .unwrap_err();
+        assert!(
+            !err.contains("not available"),
+            "Should not be a platform error: {err}"
+        );
     }
 
     // ── Windows-specific tests ──────────────────────────────────────────
