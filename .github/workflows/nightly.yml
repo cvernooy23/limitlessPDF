@@ -1,122 +1,16 @@
 name: Nightly
 
-permissions:
-  contents: write
-
 on:
   schedule:
-    - cron: "0 6 * * *" # 06:00 UTC = ~02:00 ET
-  workflow_dispatch:
+    - cron: "0 6 * * *" # 06:00 UTC daily
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            target: ""
-            targets: ""
-          - platform: macos-latest
-            target: "universal-apple-darwin"
-            targets: "aarch64-apple-darwin,x86_64-apple-darwin"
-          - platform: ubuntu-22.04
-            target: ""
-            targets: ""
-
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: latest
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            patchelf libgtk-3-dev
-
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-        with:
-          targets: ${{ matrix.targets }}
-
-      - name: Cache cargo
-        uses: swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
-        with:
-          workspaces: "src-tauri -> target"
-
-      - name: Install frontend deps
-        run: npm ci
-
-      - name: Build app
-        uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: nightly-${{ matrix.platform }}
-          path: |
-            src-tauri/target/**/release/bundle/**/*.msi
-            src-tauri/target/**/release/bundle/**/*.exe
-            src-tauri/target/**/release/bundle/**/*.dmg
-            src-tauri/target/**/release/bundle/**/*.app
-            src-tauri/target/**/release/bundle/**/*.deb
-            src-tauri/target/**/release/bundle/**/*.AppImage
-          if-no-files-found: ignore
-
-  release:
-    needs: build
+  dispatch:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: latest
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: artifacts
-          merge-multiple: false
-
-      - name: Flatten binaries
-        run: |
-          mkdir -p release-assets
-          find artifacts -type f \( \
-            -name "*.msi" -o -name "*.exe" -o \
-            -name "*.dmg" -o -name "*.deb" -o \
-            -name "*.AppImage" \
-          \) -exec cp {} release-assets/ \;
-          ls -lah release-assets/
-
-      - name: Delete existing nightly release
+      - name: Trigger nightly build from latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
-
-      - name: Create nightly release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create nightly \
-            --title "Nightly ($(date -u +%Y-%m-%d))" \
-            --notes "Automated nightly build from \`latest\` branch.
-          Commit: $(git rev-parse --short HEAD)
-          Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-          > **This is an unstable development build. Use at your own risk.**" \
-            --target latest \
-            --prerelease \
-            release-assets/*
+        run: gh workflow run nightly.yml --ref latest -R ${{ github.repository }}
