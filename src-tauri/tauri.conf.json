@@ -56,6 +56,10 @@
     "linux": {
       "appimage": {
         "bundleMediaFramework": false
+      },
+      "rpm": {
+        "epoch": 0,
+        "release": "1"
       }
     }
   }
