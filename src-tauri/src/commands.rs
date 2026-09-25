@@ -192,6 +192,50 @@ pub fn create_image_pdf(image_path: String) -> Result<String, String> {
     crate::insert::create_image_pdf(&image_path)
 }
 
+// ── Digital signature commands ───────────────────────────────────────────
+
+/// List certificates from the system certificate store (Windows only).
+#[tauri::command]
+pub fn list_certificates() -> Result<Vec<crate::digsig::CertInfo>, String> {
+    crate::digsig::list_certificates()
+}
+
+/// Digitally sign a PDF with a certificate identified by thumbprint.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn sign_pdf(
+    src_path: String,
+    dest_path: String,
+    page: u32,
+    rect: crate::digsig::SignRect,
+    thumbprint: String,
+    field_name: String,
+    reason: Option<String>,
+    location: Option<String>,
+    signer_name: Option<String>,
+    source_password: Option<String>,
+) -> Result<(), String> {
+    crate::digsig::sign_pdf(
+        &src_path,
+        &dest_path,
+        page,
+        &rect,
+        &thumbprint,
+        &field_name,
+        reason.as_deref(),
+        location.as_deref(),
+        signer_name.as_deref(),
+        source_password.as_deref(),
+    )
+}
+
+/// Create a single-page image PDF from raw PNG bytes (for typed/cursive signatures).
+/// Returns the path to the temporary PDF file.
+#[tauri::command]
+pub fn create_stamp_pdf(png_bytes: Vec<u8>) -> Result<String, String> {
+    crate::digsig::create_stamp_pdf(&png_bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

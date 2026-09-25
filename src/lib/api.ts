@@ -254,3 +254,58 @@ export async function createBlankPdf(width: number = 612, height: number = 792):
 export async function createImagePdf(imagePath: string): Promise<string> {
   return invoke<string>("create_image_pdf", { imagePath });
 }
+
+// ── Digital Signatures ──────────────────────────────────────────────────
+
+/** Certificate info returned from the system store. */
+export interface CertInfo {
+  thumbprint: string;
+  subject: string;
+  issuer: string;
+  hasPrivateKey: boolean;
+}
+
+/** Rectangle for signature placement (PDF points, origin bottom-left). */
+export interface SignRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** List certificates from the system certificate store (Windows only). */
+export async function listCertificates(): Promise<CertInfo[]> {
+  return invoke<CertInfo[]>("list_certificates");
+}
+
+/** Digitally sign a PDF with a certificate. */
+export async function signPdf(
+  srcPath: string,
+  destPath: string,
+  page: number,
+  rect: SignRect,
+  thumbprint: string,
+  fieldName: string,
+  reason?: string,
+  location?: string,
+  signerName?: string,
+  sourcePassword?: string,
+): Promise<void> {
+  await invoke("sign_pdf", {
+    srcPath,
+    destPath,
+    page,
+    rect,
+    thumbprint,
+    fieldName,
+    reason: reason ?? null,
+    location: location ?? null,
+    signerName: signerName ?? null,
+    sourcePassword: sourcePassword ?? null,
+  });
+}
+
+/** Create a single-page image PDF from raw PNG bytes (typed/cursive stamp). */
+export async function createStampPdf(pngBytes: number[]): Promise<string> {
+  return invoke<string>("create_stamp_pdf", { pngBytes });
+}
