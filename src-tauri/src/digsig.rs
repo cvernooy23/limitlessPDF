@@ -1,10 +1,11 @@
 //! Digital signature creation: certificate-based PKI signing and stamp PDFs
 //! for typed/cursive signatures.
 //!
-//! Certificate operations use the Windows CryptoAPI directly via FFI so we
-//! avoid pulling in the `windows-sys` crate (which can conflict with the
-//! version Tauri already depends on).  Non-Windows platforms get a clear
-//! error at runtime rather than a compile-time gate on the whole module.
+//! Certificate operations use platform-native tools:
+//! - **Windows**: CryptoAPI via FFI (no extra crate needed).
+//! - **macOS**: `security` CLI (Keychain / Security.framework).
+//! - **Linux**: `certutil` (NSS) / `pkcs15-tool` for listing,
+//!   `openssl cms` for PKCS#7 signing.
 
 use lopdf::{Dictionary, Document, Object, Stream};
 use serde::Serialize;
@@ -154,47 +155,58 @@ pub fn create_stamp_pdf(png_bytes: &[u8]) -> Result<String, String> {
 
 // ── Certificate listing (Windows) ────────────────────────────────────────
 
-/// List certificates from the Windows "MY" certificate store.  Returns an
-/// error on non-Windows platforms.
-#[cfg(not(target_os = "windows"))]
+/// List certificates from the platform certificate store.
 pub fn list_certificates() -> Result<Vec<CertInfo>, String> {
-    Err("Certificate listing is only available on Windows".to_string())
+    #[cfg(target_os = "windows")]
+    {
+        win_crypt::enum_my_certs()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        mac_sec::enum_identities()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux_ssl::enum_certificates()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        Err("Certificate listing is not available on this platform".to_string())
+    }
 }
 
-#[cfg(target_os = "windows")]
-pub fn list_certificates() -> Result<Vec<CertInfo>, String> {
-    win_crypt::enum_my_certs()
-}
+// ── PDF signing ─────────────────────────────────────────────────────────
 
-// ── PDF signing (Windows) ────────────────────────────────────────────────
+// Produce a PKCS#7 detached signature over two data ranges, using
+// the platform's native certificate/signing infrastructure.
+fn platform_sign_data(thumbprint: &str, data1: &[u8], data2: &[u8]) -> Result<Vec<u8>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        win_crypt::sign_data(thumbprint, data1, data2)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        mac_sec::sign_data(thumbprint, data1, data2)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux_ssl::sign_data(thumbprint, data1, data2)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        let _ = (thumbprint, data1, data2);
+        Err("PDF signing is not available on this platform".to_string())
+    }
+}
 
 /// Digitally sign a PDF with a certificate identified by its SHA-1 thumbprint.
 ///
-/// 1.  Open the source PDF.
-/// 2.  Add a signature field with /ByteRange and /Contents placeholders.
-/// 3.  Serialize to bytes.
-/// 4.  Find the placeholders, patch /ByteRange with the real offsets.
-/// 5.  Hash the signed ranges, call CryptSignMessage to produce the PKCS#7
-///     detached signature.
-/// 6.  Write the signature into /Contents and save to `dest_path`.
-#[cfg(not(target_os = "windows"))]
-#[allow(clippy::too_many_arguments)]
-pub fn sign_pdf(
-    _src_path: &str,
-    _dest_path: &str,
-    _page: u32,
-    _rect: &SignRect,
-    _thumbprint: &str,
-    _field_name: &str,
-    _reason: Option<&str>,
-    _location: Option<&str>,
-    _signer_name: Option<&str>,
-    _source_password: Option<&str>,
-) -> Result<(), String> {
-    Err("PDF signing is only available on Windows".to_string())
-}
-
-#[cfg(target_os = "windows")]
+/// 1. Open the source PDF.
+/// 2. Add a signature field with /ByteRange and /Contents placeholders.
+/// 3. Serialize to bytes.
+/// 4. Find the placeholders, patch /ByteRange with the real offsets.
+/// 5. Hash the signed ranges, produce the PKCS#7 detached signature.
+/// 6. Write the signature into /Contents and save to `dest_path`.
 #[allow(clippy::too_many_arguments)]
 pub fn sign_pdf(
     src_path: &str,
@@ -257,7 +269,7 @@ pub fn sign_pdf(
     let data2 = &buf[range2_start..range2_start + range2_len];
 
     // Sign with CryptSignMessage
-    let pkcs7 = win_crypt::sign_data(thumbprint, data1, data2)?;
+    let pkcs7 = platform_sign_data(thumbprint, data1, data2)?;
 
     if pkcs7.len() > SIG_CONTENT_BYTES {
         return Err(format!(
@@ -799,6 +811,457 @@ mod win_crypt {
                     .map_err(|e| format!("Invalid hex at offset {i}: {e}"))
             })
             .collect()
+    }
+}
+
+// ── macOS: Security.framework CLI wrappers ──────────────────────────────
+
+#[cfg(target_os = "macos")]
+mod mac_sec {
+    use super::CertInfo;
+    use std::io::Write;
+    use std::process::Command;
+
+    /// Run `security find-identity -v` to list signing identities in the
+    /// default keychain.  Each matching line looks like:
+    ///
+    ///   1) ABCDEF1234... "Common Name (details)"
+    ///
+    /// We extract the SHA-1 hash and the quoted display name.
+    pub fn enum_identities() -> Result<Vec<CertInfo>, String> {
+        let output = Command::new("security")
+            .args(["find-identity", "-v"])
+            .output()
+            .map_err(|e| format!("Failed to run `security find-identity`: {e}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut certs = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for line in stdout.lines() {
+            let line = line.trim();
+            // Skip summary lines like "2 valid identities found"
+            if !line.starts_with(|c: char| c.is_ascii_digit()) {
+                continue;
+            }
+            // Format: N) <40-char hex hash> "Display Name"
+            let after_paren = match line.find(')') {
+                Some(idx) => &line[idx + 1..],
+                None => continue,
+            };
+            let after_paren = after_paren.trim();
+            if after_paren.len() < 40 {
+                continue;
+            }
+            let hash_part = &after_paren[..40];
+            if !hash_part.chars().all(|c| c.is_ascii_hexdigit()) {
+                continue;
+            }
+            let thumbprint = hash_part.to_lowercase();
+            if !seen.insert(thumbprint.clone()) {
+                continue;
+            }
+            // Display name sits inside double quotes
+            let display = if let Some(start) = after_paren.find('"') {
+                let rest = &after_paren[start + 1..];
+                if let Some(end) = rest.find('"') {
+                    rest[..end].to_string()
+                } else {
+                    rest.to_string()
+                }
+            } else {
+                thumbprint.clone()
+            };
+
+            certs.push(CertInfo {
+                thumbprint,
+                subject: display.clone(),
+                issuer: display,
+                has_private_key: true, // find-identity only shows identities with keys
+            });
+        }
+
+        Ok(certs)
+    }
+
+    /// Sign `data1 || data2` using `security cms -S`.
+    ///
+    /// We concatenate the byte ranges into a temp file, invoke
+    /// `security cms -S -N <hash> -H SHA256 -noattr` and read back the
+    /// DER-encoded CMS blob.
+    pub fn sign_data(thumbprint: &str, data1: &[u8], data2: &[u8]) -> Result<Vec<u8>, String> {
+        let tmp_dir = std::env::temp_dir();
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let in_path = tmp_dir.join(format!("lpdf_sign_in_{stamp}.bin"));
+        let out_path = tmp_dir.join(format!("lpdf_sign_out_{stamp}.der"));
+
+        // Write concatenated data
+        let mut f =
+            std::fs::File::create(&in_path).map_err(|e| format!("Create temp file: {e}"))?;
+        f.write_all(data1)
+            .map_err(|e| format!("Write data1: {e}"))?;
+        f.write_all(data2)
+            .map_err(|e| format!("Write data2: {e}"))?;
+        drop(f);
+
+        let result = Command::new("security")
+            .args([
+                "cms", "-S", "-H", "SHA256", "-N", thumbprint, "-noattr", "-i",
+            ])
+            .arg(&in_path)
+            .arg("-o")
+            .arg(&out_path)
+            .output()
+            .map_err(|e| format!("Failed to run `security cms -S`: {e}"))?;
+
+        let _ = std::fs::remove_file(&in_path);
+
+        if !result.status.success() {
+            let _ = std::fs::remove_file(&out_path);
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            return Err(format!("security cms signing failed: {stderr}"));
+        }
+
+        let sig = std::fs::read(&out_path).map_err(|e| format!("Read CMS output: {e}"))?;
+        let _ = std::fs::remove_file(&out_path);
+
+        if sig.is_empty() {
+            return Err("security cms produced empty output".to_string());
+        }
+        Ok(sig)
+    }
+}
+
+// ── Linux: OpenSSL / NSS CLI wrappers ───────────────────────────────────
+
+#[cfg(target_os = "linux")]
+mod linux_ssl {
+    use super::CertInfo;
+    use std::io::Write;
+    use std::process::Command;
+
+    /// Try to list certificates from the NSS database (`certutil`) first,
+    /// falling back to `pkcs15-tool` (smart cards) when NSS is unavailable.
+    pub fn enum_certificates() -> Result<Vec<CertInfo>, String> {
+        // Try NSS db first (Firefox / Chrome shared db)
+        if let Ok(certs) = list_nss_certs() {
+            if !certs.is_empty() {
+                return Ok(certs);
+            }
+        }
+        // Fall back to pkcs15-tool (smart cards / PIV)
+        if let Ok(certs) = list_pkcs15_certs() {
+            if !certs.is_empty() {
+                return Ok(certs);
+            }
+        }
+        Ok(Vec::new())
+    }
+
+    /// List certificates from `~/.pki/nssdb`.
+    fn list_nss_certs() -> Result<Vec<CertInfo>, String> {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let db_dir = format!("sql:{home}/.pki/nssdb");
+
+        let output = Command::new("certutil")
+            .args(["-L", "-d", &db_dir])
+            .output()
+            .map_err(|e| format!("certutil: {e}"))?;
+
+        if !output.status.success() {
+            return Err("certutil -L failed".to_string());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut certs = Vec::new();
+
+        for line in stdout.lines() {
+            let line = line.trim();
+            if line.is_empty()
+                || line.starts_with("Certificate Nickname")
+                || line.contains("Trust Attributes")
+                || line.starts_with('-')
+            {
+                continue;
+            }
+            // "nickname   trust-flags" — 'u' flag means user cert with key
+            let has_key = line.contains(",u,") || line.ends_with(",u");
+            let parts: Vec<&str> = line.splitn(2, "  ").collect();
+            if parts.is_empty() {
+                continue;
+            }
+            let nickname = parts[0].trim().to_string();
+            if nickname.is_empty() {
+                continue;
+            }
+
+            let thumbprint = nss_cert_hash(&db_dir, &nickname).unwrap_or_default();
+            if thumbprint.is_empty() {
+                continue;
+            }
+
+            certs.push(CertInfo {
+                thumbprint,
+                subject: nickname.clone(),
+                issuer: nickname,
+                has_private_key: has_key,
+            });
+        }
+
+        Ok(certs)
+    }
+
+    /// SHA-1 fingerprint of a cert via `certutil -L -a | openssl x509 -fingerprint`.
+    fn nss_cert_hash(db_dir: &str, nickname: &str) -> Result<String, String> {
+        let pem = Command::new("certutil")
+            .args(["-L", "-d", db_dir, "-n", nickname, "-a"])
+            .output()
+            .map_err(|e| format!("certutil: {e}"))?;
+        if !pem.status.success() {
+            return Err("certutil export failed".to_string());
+        }
+
+        let mut openssl = Command::new("openssl")
+            .args(["x509", "-noout", "-fingerprint", "-sha1"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("openssl: {e}"))?;
+
+        if let Some(ref mut stdin) = openssl.stdin {
+            let _ = stdin.write_all(&pem.stdout);
+        }
+        let out = openssl
+            .wait_with_output()
+            .map_err(|e| format!("openssl wait: {e}"))?;
+
+        // "sha1 Fingerprint=AA:BB:CC:..."
+        let text = String::from_utf8_lossy(&out.stdout);
+        if let Some(eq) = text.find('=') {
+            let hex = text[eq + 1..].trim().replace(':', "").to_lowercase();
+            if hex.len() == 40 {
+                return Ok(hex);
+            }
+        }
+        Err("Could not parse SHA-1 fingerprint".to_string())
+    }
+
+    /// List certificates from a PKCS#15 smart card.
+    fn list_pkcs15_certs() -> Result<Vec<CertInfo>, String> {
+        let output = Command::new("pkcs15-tool")
+            .args(["--list-certificates"])
+            .output()
+            .map_err(|e| format!("pkcs15-tool: {e}"))?;
+
+        if !output.status.success() {
+            return Err("pkcs15-tool failed".to_string());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut certs = Vec::new();
+        let mut label = String::new();
+        let mut id = String::new();
+
+        for line in stdout.lines() {
+            let line = line.trim();
+            if line.starts_with("X.509 Certificate") {
+                label.clear();
+                id.clear();
+            } else if let Some(rest) = line.strip_prefix("Label:") {
+                label = rest.trim().to_string();
+            } else if let Some(rest) = line.strip_prefix("ID:") {
+                id = rest.trim().to_lowercase();
+            }
+            if !label.is_empty() && !id.is_empty() {
+                certs.push(CertInfo {
+                    thumbprint: id.clone(),
+                    subject: label.clone(),
+                    issuer: String::new(),
+                    has_private_key: true,
+                });
+                label.clear();
+                id.clear();
+            }
+        }
+
+        Ok(certs)
+    }
+
+    /// Sign `data1 || data2` with `openssl cms -sign`.
+    ///
+    /// For NSS-stored certs: export via `pk12util` → extract cert/key with
+    /// `openssl pkcs12` → `openssl cms -sign -signer cert.pem -inkey key.pem`.
+    pub fn sign_data(thumbprint: &str, data1: &[u8], data2: &[u8]) -> Result<Vec<u8>, String> {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let db_dir = format!("sql:{home}/.pki/nssdb");
+        let tmp = std::env::temp_dir();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+
+        let data_path = tmp.join(format!("lpdf_sign_{ts}.bin"));
+        let p12_path = tmp.join(format!("lpdf_sign_{ts}.p12"));
+        let cert_path = tmp.join(format!("lpdf_sign_{ts}_cert.pem"));
+        let key_path = tmp.join(format!("lpdf_sign_{ts}_key.pem"));
+        let out_path = tmp.join(format!("lpdf_sign_{ts}.der"));
+
+        // Write combined data
+        let mut f = std::fs::File::create(&data_path).map_err(|e| format!("Create temp: {e}"))?;
+        f.write_all(data1)
+            .map_err(|e| format!("Write data1: {e}"))?;
+        f.write_all(data2)
+            .map_err(|e| format!("Write data2: {e}"))?;
+        drop(f);
+
+        // Find the NSS nickname for this thumbprint
+        let nickname = find_nickname_by_hash(&db_dir, thumbprint)?;
+
+        // Export cert+key to PKCS#12
+        let p12 = Command::new("pk12util")
+            .args([
+                "-o",
+                p12_path.to_str().unwrap_or_default(),
+                "-d",
+                &db_dir,
+                "-n",
+                &nickname,
+                "-W",
+                "",
+            ])
+            .output()
+            .map_err(|e| format!("pk12util: {e}"))?;
+        if !p12.status.success() {
+            cleanup(&[&data_path, &p12_path]);
+            let stderr = String::from_utf8_lossy(&p12.stderr);
+            return Err(format!("pk12util export failed: {stderr}"));
+        }
+
+        // Extract certificate PEM
+        let ce = Command::new("openssl")
+            .args([
+                "pkcs12",
+                "-in",
+                p12_path.to_str().unwrap_or_default(),
+                "-clcerts",
+                "-nokeys",
+                "-out",
+                cert_path.to_str().unwrap_or_default(),
+                "-passin",
+                "pass:",
+                "-passout",
+                "pass:",
+            ])
+            .output()
+            .map_err(|e| format!("openssl pkcs12 cert: {e}"))?;
+        if !ce.status.success() {
+            cleanup(&[&data_path, &p12_path, &cert_path]);
+            return Err("Failed to extract cert from PKCS#12".to_string());
+        }
+
+        // Extract private key PEM
+        let ke = Command::new("openssl")
+            .args([
+                "pkcs12",
+                "-in",
+                p12_path.to_str().unwrap_or_default(),
+                "-nocerts",
+                "-nodes",
+                "-out",
+                key_path.to_str().unwrap_or_default(),
+                "-passin",
+                "pass:",
+            ])
+            .output()
+            .map_err(|e| format!("openssl pkcs12 key: {e}"))?;
+        if !ke.status.success() {
+            cleanup(&[&data_path, &p12_path, &cert_path, &key_path]);
+            return Err("Failed to extract key from PKCS#12".to_string());
+        }
+
+        // Sign with openssl cms
+        let sig_result = Command::new("openssl")
+            .args([
+                "cms",
+                "-sign",
+                "-binary",
+                "-noattr",
+                "-md",
+                "sha256",
+                "-signer",
+                cert_path.to_str().unwrap_or_default(),
+                "-inkey",
+                key_path.to_str().unwrap_or_default(),
+                "-in",
+                data_path.to_str().unwrap_or_default(),
+                "-outform",
+                "DER",
+                "-out",
+                out_path.to_str().unwrap_or_default(),
+            ])
+            .output()
+            .map_err(|e| format!("openssl cms: {e}"))?;
+
+        // Cleanup sensitive temp files immediately
+        cleanup(&[&data_path, &p12_path, &cert_path, &key_path]);
+
+        if !sig_result.status.success() {
+            let _ = std::fs::remove_file(&out_path);
+            let stderr = String::from_utf8_lossy(&sig_result.stderr);
+            return Err(format!("openssl cms sign failed: {stderr}"));
+        }
+
+        let sig = std::fs::read(&out_path).map_err(|e| format!("Read CMS output: {e}"))?;
+        let _ = std::fs::remove_file(&out_path);
+
+        if sig.is_empty() {
+            return Err("openssl cms produced empty output".to_string());
+        }
+        Ok(sig)
+    }
+
+    /// Map a SHA-1 thumbprint back to the NSS nickname.
+    fn find_nickname_by_hash(db_dir: &str, thumbprint: &str) -> Result<String, String> {
+        let output = Command::new("certutil")
+            .args(["-L", "-d", db_dir])
+            .output()
+            .map_err(|e| format!("certutil: {e}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let line = line.trim();
+            if line.is_empty()
+                || line.starts_with("Certificate Nickname")
+                || line.contains("Trust Attributes")
+                || line.starts_with('-')
+            {
+                continue;
+            }
+            let parts: Vec<&str> = line.splitn(2, "  ").collect();
+            if parts.is_empty() {
+                continue;
+            }
+            let nickname = parts[0].trim();
+            if nickname.is_empty() {
+                continue;
+            }
+            if let Ok(hash) = nss_cert_hash(db_dir, nickname) {
+                if hash == thumbprint {
+                    return Ok(nickname.to_string());
+                }
+            }
+        }
+        Err(format!("No certificate found with thumbprint {thumbprint}"))
+    }
+
+    fn cleanup(paths: &[&std::path::PathBuf]) {
+        for p in paths {
+            let _ = std::fs::remove_file(p);
+        }
     }
 }
 
