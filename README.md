@@ -114,25 +114,26 @@ Outputs land in `src-tauri/target/release/bundle/`:
 
 ## Keyboard shortcuts
 
-| Shortcut            | Action          |
-| ------------------- | --------------- |
-| Ctrl+S              | Save            |
-| Ctrl+Shift+S        | Save As         |
-| Ctrl+F              | Search          |
-| Ctrl+P              | Print           |
-| Ctrl+Z              | Undo            |
-| Ctrl+Shift+Z        | Redo            |
-| Ctrl+= / Ctrl+-     | Zoom in / out   |
-| Ctrl+0              | Reset zoom      |
-| Ctrl+scroll         | Zoom at cursor  |
-| Delete / Backspace  | Delete selected |
-| Escape              | Deselect / close|
+| Shortcut           | Action           |
+| ------------------ | ---------------- |
+| Ctrl+S             | Save             |
+| Ctrl+Shift+S       | Save As          |
+| Ctrl+F             | Search           |
+| Ctrl+P             | Print            |
+| Ctrl+Z             | Undo             |
+| Ctrl+Shift+Z       | Redo             |
+| Ctrl+= / Ctrl+-    | Zoom in / out    |
+| Ctrl+0             | Reset zoom       |
+| Ctrl+scroll        | Zoom at cursor   |
+| Delete / Backspace | Delete selected  |
+| Escape             | Deselect / close |
 
 ## CI / Code Quality
 
 Every push and pull request runs a comprehensive CI pipeline:
 
 **Linting & formatting**
+
 - `cargo fmt --check` — Rust formatting
 - `cargo clippy -D warnings` — Rust lints (warnings are errors)
 - `eslint` — TypeScript/Svelte linting
@@ -141,14 +142,17 @@ Every push and pull request runs a comprehensive CI pipeline:
 - `tsc --noEmit` — full TypeScript type checking
 
 **Testing**
+
 - `cargo test` — Rust unit tests
 - `vitest` — frontend unit tests
 
 **Security scanning**
+
 - **CodeQL** — GitHub's semantic code analysis for JavaScript/TypeScript, integrated with GitHub Security tab
 - **ASH (Automated Security Helper)** — AWS security scanner covering secrets detection (detect-secrets), dependency vulnerabilities, and static analysis; SARIF results uploaded to GitHub code scanning
 
 **Release builds**
+
 - Cross-platform matrix build (Windows, macOS x64/arm64, Linux) on every tagged release
 - Nightly builds from the `latest` branch (dispatched daily at 06:00 UTC)
 - Version automatically injected from git tags at build time
