@@ -48,6 +48,7 @@
     type SplitRange,
   } from "./lib/api";
   import { extractDocument, buildExport, type ExportFormat } from "./lib/export";
+  import { UndoManager } from "./lib/history";
 
   let version = $state("0.1.0");
   let engine = $state<EngineStatus | null>(null);
@@ -105,6 +106,63 @@
   let formFields = $state<FormField[]>([]);
   const formValues = new Map<string, string>();
   let formSaveMode = $state<"editable" | "flatten">("editable");
+
+  // ── Undo / redo ────────────────────────────────────────────────────
+  interface Snapshot {
+    pageList: PageItem[];
+    annotations: Annotation[];
+    textBoxes: TextBox[];
+    formEntries: [string, string][];
+  }
+
+  const history = new UndoManager<Snapshot>(50);
+  let canUndo = $state(false);
+  let canRedo = $state(false);
+
+  function captureSnapshot(): Snapshot {
+    return {
+      pageList: pageList.map((p) => ({ ...p })),
+      annotations: annotations.map((a) => ({ ...a })),
+      textBoxes: textBoxes.map((b) => ({ ...b })),
+      formEntries: Array.from(formValues.entries()),
+    };
+  }
+
+  function restoreSnapshot(snap: Snapshot) {
+    pageList = snap.pageList;
+    annotations = snap.annotations;
+    textBoxes = snap.textBoxes;
+    formValues.clear();
+    for (const [k, v] of snap.formEntries) formValues.set(k, v);
+    formFields = formFields.map((f) => ({
+      ...f,
+      value: formValues.get(f.id) ?? f.value,
+    }));
+    dirty = true;
+  }
+
+  function refreshUndoState() {
+    canUndo = history.canUndo;
+    canRedo = history.canRedo;
+  }
+
+  /** Push current state onto the undo stack before a mutation. */
+  function pushUndo() {
+    history.push(captureSnapshot());
+    refreshUndoState();
+  }
+
+  function performUndo() {
+    const snap = history.undo(captureSnapshot());
+    if (snap) restoreSnapshot(snap);
+    refreshUndoState();
+  }
+
+  function performRedo() {
+    const snap = history.redo(captureSnapshot());
+    if (snap) restoreSnapshot(snap);
+    refreshUndoState();
+  }
 
   // ── Pre-grouped per-page lookups (avoids O(pages*items) filtering) ──
   const annotationsByPage = $derived.by(() => {
@@ -303,6 +361,7 @@
 
   // Update a field value, enforcing single-selection within a radio group.
   function onFormChange(field: FormField, value: string) {
+    pushUndo();
     const updates = new Map<string, string>();
     if (field.kind === "radio" && value) {
       for (const f of formFields) {
@@ -401,6 +460,8 @@
       // Fresh document — clear annotations, text edits, form values, and search.
       annotations = [];
       textBoxes = [];
+      history.clear();
+      refreshUndoState();
       formValues.clear();
       formFields = [];
       selectedId = null;
@@ -434,6 +495,7 @@
         srcPage: i + 1,
         rotation: 0,
       }));
+      pushUndo();
       pageList = [...pageList, ...added];
       dirty = true;
       saveMsg = `Inserted ${loaded.numPages} page${loaded.numPages === 1 ? "" : "s"} from ${baseName(path)}`;
@@ -460,6 +522,7 @@
         srcPage: 1,
         rotation: 0,
       };
+      pushUndo();
       pageList = [...pageList, item];
       dirty = true;
       saveMsg = "Inserted blank page";
@@ -488,6 +551,7 @@
         srcPage: 1,
         rotation: 0,
       };
+      pushUndo();
       pageList = [...pageList, item];
       dirty = true;
       saveMsg = `Inserted image page from ${baseName(imgPath)}`;
@@ -519,6 +583,7 @@
   // --- Page operations ---
   function deletePage(key: string) {
     if (pageList.length <= 1) return; // keep at least one page
+    pushUndo();
     pageList = pageList.filter((p) => p.key !== key);
     dirty = true;
   }
@@ -526,6 +591,7 @@
   function movePage(from: number, to: number) {
     if (from === to || from < 0 || to < 0 || from >= pageList.length || to >= pageList.length)
       return;
+    pushUndo();
     const next = pageList.slice();
     const [item] = next.splice(from, 1);
     next.splice(to, 0, item);
@@ -537,6 +603,7 @@
     const item = pageList.find((p) => p.key === key);
     if (!item) return;
     const pageDoc = docs.get(item.docId);
+    pushUndo();
     const oldDelta = item.rotation;
     const newDelta = (((oldDelta + dir * 90) % 360) + 360) % 360;
 
@@ -683,6 +750,7 @@
   }
 
   function addAnnotation(a: Annotation) {
+    pushUndo();
     annotations = [...annotations, a];
     selectedId = a.id;
     dirty = true;
@@ -694,23 +762,27 @@
   }
 
   function editNote(id: string, text: string) {
+    pushUndo();
     annotations = annotations.map((a) => (a.id === id && a.type === "note" ? { ...a, text } : a));
     dirty = true;
   }
 
   function deleteAnnotation(id: string) {
+    pushUndo();
     annotations = annotations.filter((a) => a.id !== id);
     if (selectedId === id) selectedId = null;
     dirty = true;
   }
 
   function addTextBox(b: TextBox) {
+    pushUndo();
     textBoxes = [...textBoxes, b];
     selectedId = b.id;
     dirty = true;
   }
 
   function editTextBox(id: string, text: string) {
+    pushUndo();
     textBoxes = textBoxes.map((b) => (b.id === id ? { ...b, text } : b));
     dirty = true;
   }
@@ -718,6 +790,7 @@
   // Delete whichever selected item exists (annotation or text box).
   function deleteSelected() {
     if (!selectedId) return;
+    pushUndo();
     const before = annotations.length + textBoxes.length;
     annotations = annotations.filter((a) => a.id !== selectedId);
     textBoxes = textBoxes.filter((b) => b.id !== selectedId);
@@ -804,6 +877,15 @@
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
       e.preventDefault();
       printDoc();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      e.preventDefault();
+      performUndo();
+    } else if (
+      (e.ctrlKey || e.metaKey) &&
+      ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y")
+    ) {
+      e.preventDefault();
+      performRedo();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) {
       e.preventDefault();
       zoom(0.1);
@@ -1010,6 +1092,23 @@
           title="Insert an image as a new page"
         >
           Image Page
+        </button>
+        <div class="mx-1 h-5 w-px bg-white/10"></div>
+        <button
+          class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          onclick={performUndo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+        >
+          Undo
+        </button>
+        <button
+          class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
+          onclick={performRedo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          Redo
         </button>
         <button
           class="glass glass-hover rounded-full px-3 py-1.5 text-xs text-[var(--color-ink)]"
