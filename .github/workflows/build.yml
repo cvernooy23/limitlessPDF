@@ -28,6 +28,33 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Inject version from git tags
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ "$GITHUB_REF" == refs/heads/latest ]]; then
+            LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+            if [ -n "$LATEST_TAG" ]; then
+              BASE="${LATEST_TAG#v}"
+              IFS='.' read -r MAJ MIN PAT <<< "$BASE"
+              VERSION="${MAJ}.${MIN}.$((PAT + 1))"
+            fi
+          fi
+          if [ -n "${VERSION:-}" ]; then
+            echo "Setting version to $VERSION"
+            node -e "
+              const fs = require('fs');
+              for (const f of ['package.json','src-tauri/tauri.conf.json']) {
+                const p = JSON.parse(fs.readFileSync(f, 'utf8'));
+                p.version = '$VERSION';
+                fs.writeFileSync(f, JSON.stringify(p, null, 2) + '\\n');
+              }
+            "
+          fi
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
