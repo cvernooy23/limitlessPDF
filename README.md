@@ -18,17 +18,42 @@ editing/export.
 
 ## Features
 
-- **View & navigate** — fast pdf.js rendering, thumbnail sidebar, page reorder / rotate / delete, zoom, text search
-- **Annotate** — highlight, freehand draw, sticky notes, comments panel
-- **Edit text** — click-to-edit existing text runs, add new text boxes
-- **Fill forms** — detect and fill AcroForm fields (text, checkbox, radio, select)
-- **Insert** — add pages from other PDFs or insert images as new pages
-- **Digital signatures** — sign documents with hand-drawn or uploaded signatures, verify existing signatures
-- **OCR** — extract text from scanned/image-based PDFs
-- **Undo / redo** — full operation history across all editing actions
-- **Merge & assemble** — open multiple PDFs and combine pages
-- **Export** — save as annotated PDF with optional AES-128 encryption; export to TXT, Markdown, HTML, DOCX, XLSX
-- **Glassmorphism UI** — frameless transparent window with native OS blur (Mica on Windows, vibrancy on macOS)
+**View & navigate** — fast pdf.js rendering with thumbnail sidebar, pinch/Ctrl+scroll zoom
+(0.3x–4x), fit-to-width, text search (Ctrl+F), print (Ctrl+P), and drag-and-drop file open.
+Opens password-protected/encrypted PDFs with a built-in password prompt.
+
+**Annotate** — highlight, underline, strikethrough, freehand draw, sticky notes with a
+collapsible comments panel, text boxes, rectangles, circles, arrows, and redaction. Select,
+move, resize, or delete any annotation.
+
+**Edit text** — click-to-edit existing text runs via PDFium, or add new text boxes anywhere on
+the page.
+
+**Fill forms** — auto-detects AcroForm fields (text, checkbox, radio, select). Save with fields
+kept editable or flattened into the page content.
+
+**Page management** — reorder pages by dragging thumbnails, rotate left/right, delete pages,
+insert pages from another PDF, insert blank pages, or insert an image as a new page. Split a
+document into separate files by page range.
+
+**Signatures** — sign documents with a platform certificate (Windows CryptoAPI, macOS Keychain,
+Linux NSS/OpenSSL) or create a typed-name stamp signature. A verification panel checks existing
+digital signatures and reports whether the document was modified after signing.
+
+**OCR** — detect scanned/image-only pages and extract text using Tesseract, with configurable
+language and DPI.
+
+**Security** — encrypt saved PDFs with AES-128 password protection.
+
+**Export** — save as annotated PDF (with all annotations, text edits, and form values baked in),
+or export to Plain Text, Markdown, HTML, Word (.docx), or Excel (.xlsx).
+
+**Undo / redo** — full operation history (up to 50 snapshots) across annotations, text edits,
+form fills, and page operations. Ctrl+Z / Ctrl+Shift+Z.
+
+**Glassmorphism UI** — frameless transparent window with native OS blur (Mica on Windows,
+vibrancy on macOS), glass-effect panels, and an adaptive toolbar that collapses with scroll
+arrows on narrow windows.
 
 ---
 
@@ -87,6 +112,22 @@ Outputs land in `src-tauri/target/release/bundle/`:
 - **macOS:** `.app` / `.dmg`
 - **Linux:** `.AppImage`, `.deb`, `.rpm`
 
+## Keyboard shortcuts
+
+| Shortcut            | Action          |
+| ------------------- | --------------- |
+| Ctrl+S              | Save            |
+| Ctrl+Shift+S        | Save As         |
+| Ctrl+F              | Search          |
+| Ctrl+P              | Print           |
+| Ctrl+Z              | Undo            |
+| Ctrl+Shift+Z        | Redo            |
+| Ctrl+= / Ctrl+-     | Zoom in / out   |
+| Ctrl+0              | Reset zoom      |
+| Ctrl+scroll         | Zoom at cursor  |
+| Delete / Backspace  | Delete selected |
+| Escape              | Deselect / close|
+
 ## CI / Code Quality
 
 Every push and pull request runs a comprehensive CI pipeline:
@@ -139,11 +180,11 @@ limitlessPDF/
 │   │   ├── engine/mod.rs      # PDFium binding (probe, render, edit)
 │   │   ├── annotate.rs        # annotation + save pipeline
 │   │   ├── content.rs         # text content editing via PDFium
-│   │   ├── digsig.rs          # digital signature verification
+│   │   ├── digsig.rs          # digital signature creation
 │   │   ├── form.rs            # AcroForm read/write
 │   │   ├── insert.rs          # page/image insertion
 │   │   ├── ocr.rs             # OCR text extraction
-│   │   └── signature.rs       # signature placement
+│   │   └── signature.rs       # signature verification
 │   ├── resources/             # PDFium binary + license (bundled into builds)
 │   ├── capabilities/          # Tauri 2 permissions
 │   ├── icons/
