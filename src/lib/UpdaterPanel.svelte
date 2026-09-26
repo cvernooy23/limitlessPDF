@@ -19,9 +19,7 @@
     date: string | null;
   }
 
-  let channel = $state<Channel>(
-    (localStorage.getItem("update-channel") as Channel) || "stable",
-  );
+  let channel = $state<Channel>((localStorage.getItem("update-channel") as Channel) || "stable");
   let checking = $state(false);
   let installing = $state(false);
   let update = $state<UpdateInfo | null>(null);
@@ -116,7 +114,7 @@
     <div class="channel-section">
       <div class="section-label">Update channel</div>
       <div class="channel-list">
-        {#each (["stable", "beta", "alpha"] as Channel[]) as ch}
+        {#each ["stable", "beta", "alpha"] as Channel[] as ch}
           <button
             class="channel-btn glass-hover"
             class:active={channel === ch}
@@ -143,9 +141,7 @@
           Checking for updates...
         </div>
       {:else if installed}
-        <div class="status-msg success">
-          Update installed. Restart the app to apply.
-        </div>
+        <div class="status-msg success">Update installed. Restart the app to apply.</div>
       {:else if installing}
         <div class="status-msg">
           <span class="spinner-sm"></span>
@@ -189,9 +185,7 @@
     </div>
 
     {#if !checking && !installing && !installed}
-      <button class="check-btn glass-hover" onclick={checkForUpdate}>
-        Check now
-      </button>
+      <button class="check-btn glass-hover" onclick={checkForUpdate}> Check now </button>
     {/if}
   </div>
 </div>

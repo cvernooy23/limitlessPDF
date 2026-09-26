@@ -1393,10 +1393,7 @@
     {/if}
     {#if updaterOpen}
       <div class="no-print contents">
-        <UpdaterPanel
-          currentVersion={version}
-          onClose={() => (updaterOpen = false)}
-        />
+        <UpdaterPanel currentVersion={version} onClose={() => (updaterOpen = false)} />
       </div>
     {/if}
   </main>
@@ -1413,7 +1410,9 @@
 
   <footer class="flex items-center justify-between px-2 text-[11px] text-[var(--color-ink-dim)]">
     <span>
-      limitlessPDF v{version} · <button class="update-link" onclick={() => (updaterOpen = !updaterOpen)}>Updates</button>{#if loadError}
+      limitlessPDF v{version} ·
+      <button class="update-link" onclick={() => (updaterOpen = !updaterOpen)}>Updates</button
+      >{#if loadError}
         · <span class="text-[#f0a73a]">{loadError}</span>{/if}{#if saveMsg}
         · <span class="text-[var(--color-accent)]">{saveMsg}</span>{/if}
     </span>
@@ -1888,4 +1887,3 @@
     text-decoration: underline;
   }
 </style>
-
