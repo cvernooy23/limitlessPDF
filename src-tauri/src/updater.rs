@@ -71,12 +71,15 @@ pub async fn download_and_install_update<R: Runtime>(
 
     let handle = app.clone();
     update
-        .download_and_install(move |chunk, total| {
-            let _ = handle.emit(
-                "update-progress",
-                serde_json::json!({ "chunk": chunk, "total": total }),
-            );
-        })
+        .download_and_install(
+            move |chunk, total| {
+                let _ = handle.emit(
+                    "update-progress",
+                    serde_json::json!({ "chunk": chunk, "total": total }),
+                );
+            },
+            || {},
+        )
         .await
         .map_err(|e| e.to_string())
 }
