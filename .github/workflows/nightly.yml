@@ -2,6 +2,7 @@ name: Nightly
 
 permissions:
   contents: write
+  pages: write
 
 on:
   workflow_dispatch:
@@ -79,6 +80,8 @@ jobs:
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
@@ -291,6 +294,8 @@ jobs:
             *.zip
             *.pkg.tar.zst
             *.txz
+            src-tauri/target/**/release/bundle/**/*.sig
+            src-tauri/target/**/release/bundle/**/*.zip
           if-no-files-found: ignore
 
   release:
@@ -338,3 +343,21 @@ jobs:
             --target latest \
             --prerelease \
             release-assets/*
+
+      - name: Setup Node for update manifest
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Publish update manifest (alpha)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/publish-update.mjs alpha "$VERSION" "Nightly alpha build" release-assets
+
+      - name: Deploy update manifest to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./update
+          destination_dir: update
+          keep_files: true

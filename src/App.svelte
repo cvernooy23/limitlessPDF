@@ -9,6 +9,7 @@
   import OcrPanel from "./lib/OcrPanel.svelte";
   import SignaturePanel from "./lib/SignaturePanel.svelte";
   import SignDialog from "./lib/SignDialog.svelte";
+  import UpdaterPanel from "./lib/UpdaterPanel.svelte";
   import {
     ANNOTATION_COLORS,
     type Annotation,
@@ -97,6 +98,7 @@
   let ocrOpen = $state(false);
   let sigOpen = $state(false);
   let signOpen = $state(false);
+  let updaterOpen = $state(false);
 
   // Content edits (PDFium): new text objects added to pages.
   let textBoxes = $state<TextBox[]>([]);
@@ -1389,6 +1391,14 @@
         />
       </div>
     {/if}
+    {#if updaterOpen}
+      <div class="no-print contents">
+        <UpdaterPanel
+          currentVersion={version}
+          onClose={() => (updaterOpen = false)}
+        />
+      </div>
+    {/if}
   </main>
 
   {#if doc && signOpen && filePath}
@@ -1403,7 +1413,7 @@
 
   <footer class="flex items-center justify-between px-2 text-[11px] text-[var(--color-ink-dim)]">
     <span>
-      limitlessPDF v{version}{#if loadError}
+      limitlessPDF v{version} · <button class="update-link" onclick={() => (updaterOpen = !updaterOpen)}>Updates</button>{#if loadError}
         · <span class="text-[#f0a73a]">{loadError}</span>{/if}{#if saveMsg}
         · <span class="text-[var(--color-accent)]">{saveMsg}</span>{/if}
     </span>
@@ -1863,5 +1873,20 @@
       overflow: visible !important;
       background: #fff !important;
     }
+  }
+</style>
+
+<style>
+  .update-link {
+    background: none;
+    border: none;
+    color: var(--color-accent);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+  }
+  .update-link:hover {
+    text-decoration: underline;
   }
 </style>

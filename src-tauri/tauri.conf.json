@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://cvernooy23.github.io https://github.com"
     }
   },
   "bundle": {
@@ -45,6 +45,7 @@
       "icons/icon.ico"
     ],
     "resources": ["resources/*"],
+    "createUpdaterArtifacts": "v1Compatible",
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"
@@ -61,6 +62,14 @@
         "epoch": 0,
         "release": "1"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "RWS9YzsIejyDmKvKn4xJJQ5NcdfsuXTgg+C9D8M5yTF+b3jOqn+hAEMu",
+      "endpoints": [
+        "https://cvernooy23.github.io/limitlessPDF/update/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
+      ]
     }
   }
 }
