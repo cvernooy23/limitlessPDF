@@ -1874,9 +1874,7 @@
       background: #fff !important;
     }
   }
-</style>
 
-<style>
   .update-link {
     background: none;
     border: none;
@@ -1890,3 +1888,4 @@
     text-decoration: underline;
   }
 </style>
+

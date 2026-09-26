@@ -23,7 +23,10 @@ pub async fn check_for_update<R: Runtime>(
 
     let updater = app
         .updater_builder()
-        .endpoints(vec![url.parse().map_err(|e: url::ParseError| e.to_string())?])
+        .endpoints(vec![url
+            .parse()
+            .map_err(|e: url::ParseError| e.to_string())?])
+        .map_err(|e| e.to_string())?
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -53,7 +56,10 @@ pub async fn download_and_install_update<R: Runtime>(
 
     let updater = app
         .updater_builder()
-        .endpoints(vec![url.parse().map_err(|e: url::ParseError| e.to_string())?])
+        .endpoints(vec![url
+            .parse()
+            .map_err(|e: url::ParseError| e.to_string())?])
+        .map_err(|e| e.to_string())?
         .build()
         .map_err(|e| e.to_string())?;
 
