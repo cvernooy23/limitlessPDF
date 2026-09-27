@@ -18,8 +18,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+url = "2"
 
 # Pure-Rust PDF reader/writer — used to persist annotations into the file
 # without depending on the PDFium binary being present. The `embed_image`

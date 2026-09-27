@@ -1,0 +1,169 @@
+name: Beta
+
+permissions:
+  contents: write
+  pages: write
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: ""
+            targets: ""
+          - platform: macos-latest
+            target: "universal-apple-darwin"
+            targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            target: ""
+            targets: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Inject beta version from git tags
+        shell: bash
+        run: |
+          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -n "$LATEST_TAG" ]; then
+            BASE="${LATEST_TAG#v}"
+            IFS='.' read -r MAJ MIN PAT <<< "$BASE"
+            VERSION="${MAJ}.$((MIN + 1)).0"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "Setting version to $VERSION"
+          node -e "
+            const fs = require('fs');
+            for (const f of ['package.json','src-tauri/tauri.conf.json']) {
+              const p = JSON.parse(fs.readFileSync(f, 'utf8'));
+              p.version = '$VERSION';
+              fs.writeFileSync(f, JSON.stringify(p, null, 2) + '\n');
+            }
+          "
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            patchelf libgtk-3-dev rpm
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build app
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: beta-${{ matrix.platform }}
+          path: |
+            src-tauri/target/**/release/bundle/**/*.msi
+            src-tauri/target/**/release/bundle/**/*.exe
+            src-tauri/target/**/release/bundle/**/*.dmg
+            src-tauri/target/**/release/bundle/**/*.deb
+            src-tauri/target/**/release/bundle/**/*.rpm
+            src-tauri/target/**/release/bundle/**/*.AppImage
+            src-tauri/target/**/release/bundle/**/*.sig
+            src-tauri/target/**/release/bundle/**/*.zip
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Flatten binaries
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( \
+            -name "*.msi" -o -name "*.exe" -o \
+            -name "*.dmg" -o -name "*.deb" -o \
+            -name "*.rpm" -o -name "*.AppImage" -o \
+            -name "*.sig" -o -name "*.zip" \
+          \) -exec cp {} release-assets/ \;
+          ls -lah release-assets/
+
+      - name: Delete existing beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete beta --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Create beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create beta \
+            --title "Beta ($(date -u +%Y-%m-%d))" \
+            --notes "Beta pre-release build from the dev branch.
+          Commit: $(git rev-parse --short HEAD)
+          Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          This is a pre-release build for testing. Use at your own risk." \
+            --target dev \
+            --prerelease \
+            release-assets/*
+
+      - name: Setup Node for update manifest
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Publish update manifest (beta)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/publish-update.mjs beta "$VERSION" "Beta pre-release" release-assets
+
+      - name: Deploy update manifest to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./update
+          destination_dir: update
+          keep_files: true

@@ -7,6 +7,7 @@ mod form;
 mod insert;
 mod ocr;
 mod signature;
+mod updater;
 
 use tauri::Manager;
 
@@ -14,6 +15,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 apply_window_effects(&window);
@@ -37,6 +39,8 @@ pub fn run() {
             commands::list_certificates,
             commands::sign_pdf,
             commands::create_stamp_pdf,
+            updater::check_for_update,
+            updater::download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running limitlessPDF");
