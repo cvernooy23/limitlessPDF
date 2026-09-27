@@ -52,6 +52,10 @@ jobs:
             }
           "
 
+      - name: Record build version
+        shell: bash
+        run: node -p "require('./package.json').version" > build-version.txt
+
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -101,6 +105,8 @@ jobs:
             src-tauri/target/**/release/bundle/**/*.AppImage
             src-tauri/target/**/release/bundle/**/*.sig
             src-tauri/target/**/release/bundle/**/*.zip
+            src-tauri/target/**/release/bundle/**/*.tar.gz
+            build-version.txt
           if-no-files-found: ignore
 
   release:
@@ -125,7 +131,8 @@ jobs:
             -name "*.msi" -o -name "*.exe" -o \
             -name "*.dmg" -o -name "*.deb" -o \
             -name "*.rpm" -o -name "*.AppImage" -o \
-            -name "*.sig" -o -name "*.zip" \
+            -name "*.sig" -o -name "*.zip" -o \
+            -name "*.tar.gz" \
           \) -exec cp {} release-assets/ \;
           ls -lah release-assets/
 
@@ -157,8 +164,12 @@ jobs:
 
       - name: Publish update manifest (beta)
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          node scripts/publish-update.mjs beta "$VERSION" "Beta pre-release" release-assets
+          VERSION=$(find artifacts -name build-version.txt -exec cat {} + | tr -d '\r' | sort -u)
+          if [ -z "$VERSION" ] || [ "$(printf '%s\n' "$VERSION" | wc -l)" -ne 1 ]; then
+            echo "Expected one build version across platforms, got: '$VERSION'"
+            exit 1
+          fi
+          node scripts/publish-update.mjs beta "$VERSION" "Beta pre-release" release-assets beta
 
       - name: Deploy update manifest to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4

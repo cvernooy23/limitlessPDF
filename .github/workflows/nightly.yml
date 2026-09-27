@@ -49,6 +49,10 @@ jobs:
             "
           fi
 
+      - name: Record build version
+        shell: bash
+        run: node -p "require('./package.json').version" > build-version.txt
+
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -296,6 +300,8 @@ jobs:
             *.txz
             src-tauri/target/**/release/bundle/**/*.sig
             src-tauri/target/**/release/bundle/**/*.zip
+            src-tauri/target/**/release/bundle/**/*.tar.gz
+            build-version.txt
           if-no-files-found: ignore
 
   release:
@@ -320,7 +326,8 @@ jobs:
             -name "*.dmg" -o -name "*.deb" -o \
             -name "*.rpm" -o -name "*.AppImage" -o \
             -name "*.tar.gz" -o -name "*.zip" -o \
-            -name "*.pkg.tar.zst" -o -name "*.txz" \
+            -name "*.pkg.tar.zst" -o -name "*.txz" -o \
+            -name "*.sig" \
           \) -exec cp {} release-assets/ \;
           ls -lah release-assets/
 
@@ -351,8 +358,12 @@ jobs:
 
       - name: Publish update manifest (alpha)
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          node scripts/publish-update.mjs alpha "$VERSION" "Nightly alpha build" release-assets
+          VERSION=$(find artifacts -name build-version.txt -exec cat {} + | tr -d '\r' | sort -u)
+          if [ -z "$VERSION" ] || [ "$(printf '%s\n' "$VERSION" | wc -l)" -ne 1 ]; then
+            echo "Expected one build version across platforms, got: '$VERSION'"
+            exit 1
+          fi
+          node scripts/publish-update.mjs alpha "$VERSION" "Nightly alpha build" release-assets nightly
 
       - name: Deploy update manifest to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
