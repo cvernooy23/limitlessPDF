@@ -66,7 +66,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "RWRpRvyRu9r9Bueh74Bd+L5rDgbS/NEMb7MBaeu0PwohO1SXGfLglqCN",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI3MjY2OTkwN0U3MDk2NEEKUldSS2xuQitrR2ttdHpvdHYyM3pnbThhVGdJWC9xZHBJbml3MEo2eGtRQmswQUZET0RieTRwWDUK",
       "endpoints": [
         "https://cvernooy23.github.io/limitlessPDF/update/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
       ]
