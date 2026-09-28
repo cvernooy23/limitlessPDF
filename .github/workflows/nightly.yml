@@ -37,13 +37,24 @@ jobs:
           if [ -n "$LATEST_TAG" ]; then
             BASE="${LATEST_TAG#v}"
             IFS='.' read -r MAJ MIN PAT <<< "$BASE"
-            VERSION="${MAJ}.${MIN}.$((PAT + 1))"
-            echo "Setting version to $VERSION"
+            NEXT="${MAJ}.${MIN}.$((PAT + 1))"
+            # <next>-<run>.nightly sorts above the last release, below the next
+            # one, and increases every run (the run number is its own numeric
+            # semver field). MSI only accepts numeric versions, so the Windows
+            # installer gets <next>.<run> via bundle.windows.wix.version.
+            VERSION="${NEXT}-${GITHUB_RUN_NUMBER}.nightly"
+            WIX_VERSION="${NEXT}.${GITHUB_RUN_NUMBER}"
+            echo "Setting version to $VERSION (MSI: $WIX_VERSION)"
             node -e "
               const fs = require('fs');
               for (const f of ['package.json','src-tauri/tauri.conf.json']) {
                 const p = JSON.parse(fs.readFileSync(f, 'utf8'));
                 p.version = '$VERSION';
+                if (f.endsWith('tauri.conf.json')) {
+                  p.bundle = p.bundle || {};
+                  p.bundle.windows = p.bundle.windows || {};
+                  p.bundle.windows.wix = { ...p.bundle.windows.wix, version: '$WIX_VERSION' };
+                }
                 fs.writeFileSync(f, JSON.stringify(p, null, 2) + '\\n');
               }
             "
@@ -174,6 +185,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          VERSION="${VERSION//-/_}" # pacman versions cannot contain '-'
           BINARY="src-tauri/target/release/limitless-pdf"
           if [ ! -f "$BINARY" ]; then
             BINARY=$(find src-tauri/target/release -maxdepth 1 -name "limitless*pdf*" -type f -executable | head -1)
@@ -229,6 +241,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          VERSION="${VERSION//-/_}" # Slackware splits package names on '-'
           BINARY="src-tauri/target/release/limitless-pdf"
           if [ ! -f "$BINARY" ]; then
             BINARY=$(find src-tauri/target/release -maxdepth 1 -name "limitless*pdf*" -type f -executable | head -1)
