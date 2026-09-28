@@ -313,7 +313,8 @@ jobs:
             *.txz
             src-tauri/target/**/release/bundle/**/*.sig
             src-tauri/target/**/release/bundle/**/*.zip
-            src-tauri/target/**/release/bundle/**/*.tar.gz
+            src-tauri/target/**/release/bundle/**/*.app.tar.gz
+            src-tauri/target/**/release/bundle/**/*.AppImage.tar.gz
             build-version.txt
           if-no-files-found: ignore
 
