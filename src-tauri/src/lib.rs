@@ -9,10 +9,18 @@ mod ocr;
 mod signature;
 mod updater;
 
+#[cfg(target_os = "linux")]
+mod linux_gl;
+
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // On Linux, fall back to software rendering when EGL is unusable so we
+    // degrade gracefully instead of aborting on GPU-less machines.
+    #[cfg(target_os = "linux")]
+    linux_gl::ensure_webkit_compat();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
