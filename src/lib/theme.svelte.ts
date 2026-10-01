@@ -44,14 +44,12 @@ class ThemeController {
     applyResolved(this.resolved);
 
     if (typeof window !== "undefined" && window.matchMedia) {
-      window
-        .matchMedia("(prefers-color-scheme: light)")
-        .addEventListener("change", () => {
-          if (this.pref === "system") {
-            this.resolved = systemResolved();
-            applyResolved(this.resolved);
-          }
-        });
+      window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+        if (this.pref === "system") {
+          this.resolved = systemResolved();
+          applyResolved(this.resolved);
+        }
+      });
     }
   }
 

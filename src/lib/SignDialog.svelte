@@ -138,9 +138,8 @@
       // Draw text
       ctx.font = `italic ${fontSize}px "Segoe Script", "Brush Script MT", cursive`;
       ctx.fillStyle =
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--signature-ink")
-          .trim() || "#1a1a2e";
+        getComputedStyle(document.documentElement).getPropertyValue("--signature-ink").trim() ||
+        "#1a1a2e";
       ctx.textBaseline = "middle";
       ctx.fillText(typedName, 20, textHeight / 2);
 

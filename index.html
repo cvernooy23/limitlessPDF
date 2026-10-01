@@ -12,8 +12,7 @@
           var resolved =
             p === "light" || p === "dark"
               ? p
-              : window.matchMedia &&
-                  window.matchMedia("(prefers-color-scheme: light)").matches
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
                 ? "light"
                 : "dark";
           document.documentElement.setAttribute("data-theme", resolved);
