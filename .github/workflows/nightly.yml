@@ -171,9 +171,19 @@ jobs:
           if ($exe) {
             New-Item -ItemType Directory -Force portable | Out-Null
             Copy-Item $exe.FullName portable/
+            # PDFium powers all rendering/editing. The portable .exe loads it
+            # from its own folder, so it MUST ride along. Fail loudly if the
+            # build didn't fetch it, rather than shipping a dead portable.
+            $pdfium = "src-tauri/resources/pdfium.dll"
+            if (Test-Path $pdfium) {
+              Copy-Item $pdfium portable/
+            } else {
+              Write-Error "pdfium.dll not found at $pdfium - portable build would ship without PDF rendering"
+              exit 1
+            }
             $wv2 = Get-ChildItem -Recurse src-tauri/target/release/bundle -Filter "MicrosoftEdgeWebview2Setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($wv2) { Copy-Item $wv2.FullName portable/ }
-            $readme = "limitlessPDF - Portable Windows Build`r`n`r`nRun limitlessPDF.exe directly. No installation required.`r`nIf WebView2 is not installed, run MicrosoftEdgeWebview2Setup.exe first."
+            $readme = "limitlessPDF - Portable Windows Build`r`n`r`nRun limitlessPDF.exe directly. No installation required.`r`nKeep pdfium.dll in the same folder as the exe - it powers PDF rendering.`r`nIf WebView2 is not installed, run MicrosoftEdgeWebview2Setup.exe first."
             [System.IO.File]::WriteAllText("portable/README.txt", $readme)
             Compress-Archive -Path portable/* -DestinationPath "limitlessPDF-${version}-windows-x86_64-portable.zip"
             Remove-Item -Recurse -Force portable
@@ -202,6 +212,15 @@ jobs:
 
           cp "$BINARY" "$PKG_ROOT/usr/bin/limitless-pdf"
           chmod 755 "$PKG_ROOT/usr/bin/limitless-pdf"
+          # PDFium ships beside the binary (this hand-rolled package skips
+          # Tauri's resource bundler, so resources/* won't carry it).
+          if [ -f src-tauri/resources/libpdfium.so ]; then
+            cp src-tauri/resources/libpdfium.so "$PKG_ROOT/usr/bin/libpdfium.so"
+            chmod 755 "$PKG_ROOT/usr/bin/libpdfium.so"
+          else
+            echo "libpdfium.so missing - package would ship without PDF rendering" >&2
+            exit 1
+          fi
 
           if [ -f "src-tauri/icons/128x128.png" ]; then
             cp "src-tauri/icons/128x128.png" "$PKG_ROOT/usr/share/icons/hicolor/128x128/apps/limitless-pdf.png"
@@ -259,6 +278,15 @@ jobs:
 
           cp "$BINARY" "$SLACK_ROOT/usr/bin/limitless-pdf"
           chmod 755 "$SLACK_ROOT/usr/bin/limitless-pdf"
+          # PDFium ships beside the binary (this hand-rolled package skips
+          # Tauri's resource bundler, so resources/* won't carry it).
+          if [ -f src-tauri/resources/libpdfium.so ]; then
+            cp src-tauri/resources/libpdfium.so "$SLACK_ROOT/usr/bin/libpdfium.so"
+            chmod 755 "$SLACK_ROOT/usr/bin/libpdfium.so"
+          else
+            echo "libpdfium.so missing - package would ship without PDF rendering" >&2
+            exit 1
+          fi
 
           if [ -f "src-tauri/icons/128x128.png" ]; then
             cp "src-tauri/icons/128x128.png" "$SLACK_ROOT/usr/share/icons/hicolor/128x128/apps/limitless-pdf.png"

@@ -25,6 +25,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Capture the resource dir so the PDFium loader can find the
+            // bundled library on Linux/macOS, where it is not next to the exe.
+            if let Ok(resource_dir) = app.path().resource_dir() {
+                engine::set_resource_dir(resource_dir);
+            }
             if let Some(window) = app.get_webview_window("main") {
                 apply_window_effects(&window);
             }
