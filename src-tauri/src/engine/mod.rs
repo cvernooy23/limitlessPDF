@@ -3,6 +3,20 @@
 use pdfium_render::prelude::*;
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+/// Tauri's resolved resource directory, captured once at startup. The deep
+/// render / OCR path (`instance()`) has no `AppHandle`, so without this it
+/// could only look next to the executable — which is where bundled resources
+/// live on Windows but NOT on Linux (`/usr/lib/<app>/resources/`) or macOS
+/// (`Contents/Resources/`). Caching it here keeps `instance()` in sync with
+/// `engine_status`, which already consults the resource dir.
+static RESOURCE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Record the app's resource directory. Called once from `setup()`.
+pub fn set_resource_dir(dir: PathBuf) {
+    let _ = RESOURCE_DIR.set(dir);
+}
 
 #[derive(Serialize)]
 pub struct EngineStatus {
@@ -50,6 +64,11 @@ pub fn instance() -> Result<Pdfium, String> {
             dirs.push(p.to_path_buf());
             dirs.push(p.join("resources")); // bundled resources keep this prefix
         }
+    }
+    if let Some(res) = RESOURCE_DIR.get() {
+        // Bundled resources keep their `resources/` prefix on disk.
+        dirs.push(res.join("resources"));
+        dirs.push(res.clone());
     }
     dirs.push(PathBuf::from("."));
     dirs.push(PathBuf::from("./resources"));
