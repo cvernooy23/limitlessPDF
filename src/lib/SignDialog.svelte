@@ -137,7 +137,10 @@
 
       // Draw text
       ctx.font = `italic ${fontSize}px "Segoe Script", "Brush Script MT", cursive`;
-      ctx.fillStyle = "#1a1a2e";
+      ctx.fillStyle =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--signature-ink")
+          .trim() || "#1a1a2e";
       ctx.textBaseline = "middle";
       ctx.fillText(typedName, 20, textHeight / 2);
 
@@ -508,11 +511,11 @@
     font-family: "Segoe Script", "Brush Script MT", cursive;
     font-size: 2rem;
     font-style: italic;
-    color: var(--color-ink);
+    color: var(--signature-ink);
     padding: 16px 20px;
-    background: var(--surface-sunken);
+    background: var(--signature-paper);
     border-radius: 10px;
-    border: 1px dashed var(--surface-sunken-stroke);
+    border: 1px solid rgba(15, 23, 42, 0.15);
     text-align: center;
     min-height: 60px;
     display: flex;

@@ -120,6 +120,12 @@
     sans-serif;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
+
+  /* A typed signature is stamped as ink on the (white) PDF page, so its
+     preview and the stamped image are ink-on-paper in BOTH themes — no
+     light override — otherwise the dark-mode preview wouldn't match output. */
+  --signature-ink: #1a1a2e;
+  --signature-paper: #ffffff;
 }
 
 html,
