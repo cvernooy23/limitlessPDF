@@ -265,12 +265,12 @@
   .toolbar-wrap:has(.scroll-arrow.left.visible)::before {
     opacity: 1;
     left: 24px;
-    background: linear-gradient(to right, var(--color-bg, #1a1a2e), transparent);
+    background: linear-gradient(to right, var(--edge-fade), transparent);
   }
   .toolbar-wrap:has(.scroll-arrow.right.visible)::after {
     opacity: 1;
     right: 24px;
-    background: linear-gradient(to left, var(--color-bg, #1a1a2e), transparent);
+    background: linear-gradient(to left, var(--edge-fade), transparent);
   }
 
   /* Arrow buttons */
@@ -283,7 +283,7 @@
     flex-shrink: 0;
     border-radius: 50%;
     border: none;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--surface-sunken);
     color: var(--color-ink);
     cursor: pointer;
     opacity: 0;
@@ -297,7 +297,7 @@
   }
   .scroll-arrow:hover {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--glass-hover-bg);
   }
   .scroll-arrow.left {
     margin-right: 4px;
@@ -321,9 +321,9 @@
     cursor: default;
   }
   .tool.active {
-    background: linear-gradient(135deg, rgba(110, 168, 255, 0.28), rgba(167, 139, 250, 0.28));
-    border-color: rgba(110, 168, 255, 0.5);
-    color: #fff;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent-strong-2));
+    border-color: var(--color-accent);
+    color: var(--on-accent);
   }
 
   /* Print layout: hide toolbar entirely */

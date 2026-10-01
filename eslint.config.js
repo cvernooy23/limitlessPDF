@@ -34,14 +34,15 @@ export default [
     },
   },
 
-  // Svelte files
+  // Svelte files (including .svelte.ts / .svelte.js rune modules)
   ...sveltePlugin.configs["flat/recommended"],
   {
-    files: ["**/*.svelte"],
+    files: ["**/*.svelte", "**/*.svelte.ts", "**/*.svelte.js"],
     languageOptions: {
       parser: svelteParser,
       parserOptions: {
         parser: tsParser,
+        extraFileExtensions: [".svelte"],
       },
     },
     rules: {

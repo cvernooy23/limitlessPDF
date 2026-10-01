@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
-/* ---- limitlessPDF design tokens ---------------------------------------------- */
+/* ---- limitlessPDF design tokens --------------------------------------------
+   Base (dark) token values live in @theme so Tailwind is aware of them. Light
+   mode is a set of overrides keyed on <html data-theme="light">. Components
+   should reference these vars, never raw colors, so both themes stay in sync.
+----------------------------------------------------------------------------- */
 @theme {
   --color-glass-tint: rgba(255, 255, 255, 0.06);
   --color-glass-stroke: rgba(255, 255, 255, 0.12);
@@ -11,9 +15,102 @@
   --radius-glass: 16px;
 }
 
+/* ---- semantic tokens: dark (default) ------------------------------------ */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --glass-hover-bg: rgba(255, 255, 255, 0.1);
+  --glass-hover-stroke: rgba(255, 255, 255, 0.2);
+
+  --surface-sunken: rgba(255, 255, 255, 0.06);
+  --surface-sunken-stroke: rgba(255, 255, 255, 0.15);
+  --surface-overlay: rgba(8, 8, 14, 0.55);
+
+  --divider: rgba(255, 255, 255, 0.12);
+  --divider-on-accent: rgba(11, 13, 20, 0.25);
+
+  --sheen-soft: rgba(255, 255, 255, 0.06);
+  --sheen-strong: rgba(255, 255, 255, 0.14);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
+
+  --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --inset-highlight: rgba(255, 255, 255, 0.08);
+
+  --on-accent: #ffffff;
+  --ink-invert: #0b0d14;
+
+  --ok: #46d39a;
+  --warn: #f0a73a;
+  --danger: #e5484d;
+
+  --accent-soft: rgba(110, 168, 255, 0.3);
+  --accent-soft-2: rgba(167, 139, 250, 0.3);
+  --accent-strong: rgba(110, 168, 255, 0.42);
+  --accent-strong-2: rgba(167, 139, 250, 0.42);
+  --accent-ring: rgba(110, 168, 255, 0.3);
+  --edge-fade: rgba(18, 20, 30, 0.9);
+
+  --app-bg:
+    radial-gradient(1200px 600px at 15% -10%, rgba(110, 168, 255, 0.16), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, rgba(167, 139, 250, 0.14), transparent 55%),
+    linear-gradient(160deg, rgba(20, 22, 32, 0.72), rgba(12, 13, 20, 0.82));
+}
+
+/* ---- semantic tokens: light overrides ----------------------------------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-glass-tint: rgba(255, 255, 255, 0.62);
+  --color-glass-stroke: rgba(15, 23, 42, 0.1);
+  --color-ink: #1b1e28;
+  --color-ink-dim: #5a6175;
+  --color-accent: #2f6fe0;
+  --color-accent-2: #7c5cf0;
+
+  --glass-hover-bg: rgba(255, 255, 255, 0.82);
+  --glass-hover-stroke: rgba(15, 23, 42, 0.16);
+
+  --surface-sunken: rgba(15, 23, 42, 0.05);
+  --surface-sunken-stroke: rgba(15, 23, 42, 0.12);
+  --surface-overlay: rgba(30, 34, 48, 0.32);
+
+  --divider: rgba(15, 23, 42, 0.1);
+  --divider-on-accent: rgba(11, 13, 20, 0.2);
+
+  --sheen-soft: rgba(255, 255, 255, 0.35);
+  --sheen-strong: rgba(255, 255, 255, 0.7);
+
+  --scrollbar-thumb: rgba(15, 23, 42, 0.22);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.34);
+
+  --shadow-panel: 0 12px 40px rgba(31, 38, 74, 0.14);
+  --inset-highlight: rgba(255, 255, 255, 0.75);
+
+  --on-accent: #ffffff;
+  --ink-invert: #0b0d14;
+
+  --ok: #12a673;
+  --warn: #c07a12;
+  --danger: #d93a3f;
+
+  --accent-soft: rgba(47, 111, 224, 0.16);
+  --accent-soft-2: rgba(124, 92, 240, 0.16);
+  --accent-strong: rgba(47, 111, 224, 0.9);
+  --accent-strong-2: rgba(124, 92, 240, 0.9);
+  --accent-ring: rgba(47, 111, 224, 0.35);
+  --edge-fade: rgba(237, 240, 248, 0.92);
+
+  --app-bg:
+    radial-gradient(1200px 600px at 15% -10%, rgba(110, 168, 255, 0.14), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, rgba(167, 139, 250, 0.12), transparent 55%),
+    linear-gradient(160deg, rgba(237, 240, 248, 0.88), rgba(222, 226, 238, 0.93));
+}
+
 /* ---- base --------------------------------------------------------------- */
 :root {
-  color-scheme: dark;
   font-family:
     "Inter",
     system-ui,
@@ -23,6 +120,12 @@
     sans-serif;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
+
+  /* A typed signature is stamped as ink on the (white) PDF page, so its
+     preview and the stamped image are ink-on-paper in BOTH themes — no
+     light override — otherwise the dark-mode preview wouldn't match output. */
+  --signature-ink: #1a1a2e;
+  --signature-paper: #ffffff;
 }
 
 html,
@@ -52,12 +155,9 @@ body {
 }
 
 #app {
-  /* Fallback ambient gradient for platforms without native blur (some Linux
+  /* Ambient gradient for platforms without native blur (some Linux
      compositors). On Windows/macOS the OS effect dominates. */
-  background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(110, 168, 255, 0.16), transparent 60%),
-    radial-gradient(1000px 700px at 110% 10%, rgba(167, 139, 250, 0.14), transparent 55%),
-    linear-gradient(160deg, rgba(20, 22, 32, 0.72), rgba(12, 13, 20, 0.82));
+  background: var(--app-bg);
 }
 
 /* ---- reusable glass surface --------------------------------------------- */
@@ -67,8 +167,8 @@ body {
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 40px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 var(--inset-highlight),
+    var(--shadow-panel);
 }
 
 .glass-hover {
@@ -78,8 +178,8 @@ body {
     transform 160ms ease;
 }
 .glass-hover:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--glass-hover-bg);
+  border-color: var(--glass-hover-stroke);
 }
 
 /* Specular sheen used on the main panels for the "shiny" look. */
@@ -94,9 +194,9 @@ body {
   background: linear-gradient(
     115deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.06) 42%,
-    rgba(255, 255, 255, 0.14) 50%,
-    rgba(255, 255, 255, 0.06) 58%,
+    var(--sheen-soft) 42%,
+    var(--sheen-strong) 50%,
+    var(--sheen-soft) 58%,
     transparent 100%
   );
   transform: translateX(-120%);
@@ -123,12 +223,12 @@ body {
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--scrollbar-thumb-hover);
   background-clip: padding-box;
 }

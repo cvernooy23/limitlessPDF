@@ -137,7 +137,9 @@
 
       // Draw text
       ctx.font = `italic ${fontSize}px "Segoe Script", "Brush Script MT", cursive`;
-      ctx.fillStyle = "#1a1a2e";
+      ctx.fillStyle =
+        getComputedStyle(document.documentElement).getPropertyValue("--signature-ink").trim() ||
+        "#1a1a2e";
       ctx.textBaseline = "middle";
       ctx.fillText(typedName, 20, textHeight / 2);
 
@@ -327,7 +329,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--surface-overlay);
     backdrop-filter: blur(4px);
   }
   .sign-dialog {
@@ -361,7 +363,7 @@
     border-radius: 8px;
   }
   .close-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--surface-sunken);
     color: var(--color-ink);
   }
 
@@ -369,7 +371,7 @@
   .tab-bar {
     display: flex;
     gap: 4px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--divider);
     padding-bottom: 8px;
   }
   .tab-btn {
@@ -383,10 +385,10 @@
     transition: all 0.15s;
   }
   .tab-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-sunken);
   }
   .tab-btn.active {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--glass-hover-bg);
     color: var(--color-ink);
     font-weight: 500;
   }
@@ -413,10 +415,10 @@
     border-radius: 10px;
     cursor: pointer;
     transition: background 0.15s;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--surface-sunken);
   }
   .cert-item:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-sunken);
   }
   .cert-item.selected {
     background: rgba(70, 211, 154, 0.1);
@@ -424,7 +426,7 @@
   }
   .cert-item input[type="radio"] {
     margin-top: 3px;
-    accent-color: #46d39a;
+    accent-color: var(--ok);
   }
   .cert-info {
     display: flex;
@@ -442,7 +444,7 @@
   }
   .cert-warn {
     font-size: 0.7rem;
-    color: #f0a73a;
+    color: var(--warn);
   }
 
   /* Form */
@@ -460,8 +462,8 @@
   }
   .form-grid input,
   .form-grid select {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--surface-sunken);
+    border: 1px solid var(--divider);
     border-radius: 8px;
     padding: 6px 10px;
     color: var(--color-ink);
@@ -482,8 +484,8 @@
     color: var(--color-ink-dim);
   }
   .name-input {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--surface-sunken);
+    border: 1px solid var(--divider);
     border-radius: 10px;
     padding: 10px 14px;
     color: var(--color-ink);
@@ -508,11 +510,11 @@
     font-family: "Segoe Script", "Brush Script MT", cursive;
     font-size: 2rem;
     font-style: italic;
-    color: var(--color-ink);
+    color: var(--signature-ink);
     padding: 16px 20px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--signature-paper);
     border-radius: 10px;
-    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(15, 23, 42, 0.15);
     text-align: center;
     min-height: 60px;
     display: flex;
@@ -530,12 +532,12 @@
   }
   .error {
     font-size: 0.82rem;
-    color: #e74c3c;
+    color: var(--danger);
     margin: 0;
   }
   .success {
     font-size: 0.82rem;
-    color: #46d39a;
+    color: var(--ok);
     margin: 0;
   }
   .hint {
