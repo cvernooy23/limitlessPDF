@@ -48,13 +48,34 @@ if (!target) {
   process.exit(1);
 }
 
+async function fetchWithRetry(url, attempts = 5) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch(url, { redirect: "follow" });
+      if (res.ok) return res;
+      // GitHub's release CDN intermittently returns 5xx/429; retry those.
+      if (res.status >= 500 || res.status === 429) {
+        lastErr = new Error(`HTTP ${res.status}`);
+      } else {
+        throw new Error(`Download failed (HTTP ${res.status}) from ${url}`);
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < attempts) {
+      const delay = 1000 * 2 ** (i - 1); // 1s, 2s, 4s, 8s
+      console.log(`  ! ${lastErr.message} — retry ${i}/${attempts - 1} in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error(`Download failed after ${attempts} attempts from ${url}: ${lastErr.message}`);
+}
+
 async function download(asset, work) {
   const url = `https://github.com/${REPO}/releases/latest/download/${asset}`;
   console.log(`→ Downloading ${asset} ...`);
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) {
-    throw new Error(`Download failed (HTTP ${res.status}) from ${url}`);
-  }
+  const res = await fetchWithRetry(url);
   const tgz = join(work, asset);
   writeFileSync(tgz, Buffer.from(await res.arrayBuffer()));
 
