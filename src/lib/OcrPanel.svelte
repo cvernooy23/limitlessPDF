@@ -206,7 +206,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--divider);
   }
   .ocr-title {
     font-size: 13px;
@@ -241,14 +241,14 @@
   }
   .ocr-warn {
     font-weight: 600;
-    color: #f0a73a;
+    color: var(--warn);
   }
   .ocr-install {
     font-size: 11px;
     color: var(--color-ink-dim);
     white-space: pre-wrap;
     line-height: 1.5;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface-sunken);
     padding: 8px 10px;
     border-radius: 8px;
   }
@@ -305,8 +305,8 @@
   .ocr-opt select {
     padding: 5px 8px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--surface-sunken);
+    border: 1px solid var(--surface-sunken-stroke);
     color: var(--color-ink);
     font-size: 12px;
     outline: none;
@@ -319,7 +319,7 @@
     border-radius: 10px;
     font-size: 13px;
     font-weight: 600;
-    color: #0b0d14;
+    color: var(--ink-invert);
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
     border: 1px solid rgba(255, 255, 255, 0.25);
     cursor: pointer;
@@ -332,7 +332,7 @@
     cursor: default;
   }
   .ocr-error {
-    color: #f0a73a;
+    color: var(--warn);
     font-size: 11px;
     padding: 6px 8px;
     border-radius: 8px;
@@ -346,7 +346,7 @@
   .ocr-results-head {
     font-size: 12px;
     font-weight: 600;
-    color: #46d39a;
+    color: var(--ok);
   }
   .ocr-result-row {
     display: flex;
@@ -367,7 +367,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     padding: 4px 6px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--surface-sunken);
     border-radius: 6px;
   }
 </style>

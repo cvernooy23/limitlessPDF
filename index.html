@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>limitlessPDF</title>
+    <script>
+      // Resolve and apply the theme before first paint to avoid a flash.
+      (function () {
+        try {
+          var p = localStorage.getItem("lp-theme");
+          var resolved =
+            p === "light" || p === "dark"
+              ? p
+              : window.matchMedia &&
+                  window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.setAttribute("data-theme", resolved);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

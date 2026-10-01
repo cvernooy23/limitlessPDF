@@ -38,8 +38,8 @@
   }
 
   function statusColor(sig: SignatureInfo): string {
-    if (sig.status === "signed") return "#46d39a";
-    if (sig.status === "modified") return "#f0a73a";
+    if (sig.status === "signed") return "var(--ok)";
+    if (sig.status === "modified") return "var(--warn)";
     return "var(--color-ink-dim)";
   }
 
@@ -145,7 +145,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--divider);
   }
   .sig-title {
     font-size: 13px;
@@ -179,7 +179,7 @@
     padding: 28px 14px;
   }
   .sig-error {
-    color: #f0a73a;
+    color: var(--warn);
     font-size: 11px;
     padding: 6px 8px;
     border-radius: 8px;
@@ -195,7 +195,7 @@
     padding: 10px 12px;
     border-radius: 12px;
     border: 1px solid var(--color-glass-stroke);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface-sunken);
   }
   .sig-status {
     display: flex;
@@ -240,7 +240,7 @@
     line-height: 1.5;
     padding: 6px 8px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--surface-sunken);
     opacity: 0.7;
   }
 </style>

@@ -1168,9 +1168,9 @@
       >
         <span
           class="h-2 w-2 rounded-full"
-          style="background: {engineOk ? '#46d39a' : '#f0a73a'}; box-shadow: 0 0 8px {engineOk
-            ? '#46d39a'
-            : '#f0a73a'};"
+          style="background: {engineOk ? 'var(--ok)' : 'var(--warn)'}; box-shadow: 0 0 8px {engineOk
+            ? 'var(--ok)'
+            : 'var(--warn)'};"
         ></span>
         <span class="text-[var(--color-ink-dim)]">{engineLabel}</span>
       </div>
@@ -1413,7 +1413,7 @@
       limitlessPDF v{version} ·
       <button class="update-link" onclick={() => (updaterOpen = !updaterOpen)}>Updates</button
       >{#if loadError}
-        · <span class="text-[#f0a73a]">{loadError}</span>{/if}{#if saveMsg}
+        · <span class="text-[var(--warn)]">{loadError}</span>{/if}{#if saveMsg}
         · <span class="text-[var(--color-accent)]">{saveMsg}</span>{/if}
     </span>
     <span>{doc ? `${doc.numPages} pages` : "M1 viewer — Tauri · Svelte · pdf.js"}</span>
@@ -1559,7 +1559,7 @@
     cursor: pointer;
   }
   .swatch.on {
-    border-color: #fff;
+    border-color: var(--color-ink);
     transform: scale(1.12);
   }
   .penrange {
@@ -1568,12 +1568,12 @@
   }
   .comments-on {
     border-color: var(--color-accent);
-    color: #fff;
+    color: var(--color-accent);
   }
   .save-btn {
     font-size: 12px;
     font-weight: 600;
-    color: #0b0d14;
+    color: var(--ink-invert);
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
     border: 1px solid rgba(255, 255, 255, 0.25);
     padding: 6px 12px;
@@ -1588,7 +1588,7 @@
   }
   .save-btn-main {
     border-radius: 999px 0 0 999px;
-    border-right: 1px solid rgba(11, 13, 20, 0.25);
+    border-right: 1px solid var(--divider-on-accent);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1597,8 +1597,8 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #0b0d14;
-    box-shadow: 0 0 0 2px rgba(11, 13, 20, 0.25);
+    background: var(--ink-invert);
+    box-shadow: 0 0 0 2px var(--divider-on-accent);
   }
   .save-btn-as {
     border-radius: 0 999px 999px 0;
@@ -1621,8 +1621,8 @@
     white-space: nowrap;
   }
   .form-toggle button.on {
-    background: linear-gradient(135deg, rgba(110, 168, 255, 0.3), rgba(167, 139, 250, 0.3));
-    color: #fff;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent-strong-2));
+    color: var(--on-accent);
   }
   .lock-btn {
     display: flex;
@@ -1638,11 +1638,7 @@
     position: relative;
   }
   .export-on {
-    background: linear-gradient(
-      135deg,
-      rgba(110, 168, 255, 0.28),
-      rgba(167, 139, 250, 0.28)
-    ) !important;
+    background: linear-gradient(135deg, var(--accent-soft), var(--accent-soft-2)) !important;
   }
   .export-backdrop {
     position: fixed;
@@ -1679,7 +1675,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(8, 8, 14, 0.55);
+    background: var(--surface-overlay);
     backdrop-filter: blur(3px);
   }
   .pw-modal {
@@ -1706,15 +1702,15 @@
     margin-top: 6px;
     padding: 9px 12px;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--surface-sunken-stroke);
+    background: var(--surface-sunken);
     color: var(--color-ink);
     outline: none;
     font-size: 13px;
   }
   .pw-modal-input:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 2px rgba(110, 168, 255, 0.3);
+    box-shadow: 0 0 0 2px var(--accent-ring);
   }
   .pw-modal-actions {
     display: flex;
@@ -1728,20 +1724,20 @@
     border-radius: 10px;
     font-size: 13px;
     color: var(--color-ink);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--surface-sunken);
+    border: 1px solid var(--surface-sunken-stroke);
   }
   .pw-modal-btn.primary {
-    background: linear-gradient(135deg, rgba(110, 168, 255, 0.5), rgba(167, 139, 250, 0.5));
-    border-color: rgba(110, 168, 255, 0.6);
-    color: #fff;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent-strong-2));
+    border-color: var(--color-accent);
+    color: var(--on-accent);
   }
   .pw-modal-btn:disabled {
     opacity: 0.45;
   }
   .lock-btn.on {
-    background: linear-gradient(135deg, rgba(110, 168, 255, 0.35), rgba(167, 139, 250, 0.35));
-    border: 1px solid rgba(110, 168, 255, 0.5);
+    background: linear-gradient(135deg, var(--accent-soft), var(--accent-soft-2));
+    border: 1px solid var(--color-accent);
   }
   .pw-field {
     display: flex;
@@ -1813,7 +1809,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    background: rgba(12, 13, 20, 0.45);
+    background: var(--surface-overlay);
     backdrop-filter: blur(4px);
     z-index: 10;
   }
@@ -1821,7 +1817,7 @@
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    border: 3px solid rgba(255, 255, 255, 0.15);
+    border: 3px solid var(--surface-sunken-stroke);
     border-top-color: var(--color-accent);
     animation: spin 0.8s linear infinite;
   }

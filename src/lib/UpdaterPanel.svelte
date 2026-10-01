@@ -204,7 +204,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--divider);
   }
   .updater-title {
     font-size: 13px;
@@ -260,7 +260,7 @@
     width: 100%;
   }
   .channel-btn.active {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-sunken);
     border-color: var(--color-accent);
   }
   .channel-name {
@@ -275,7 +275,7 @@
 
   .divider {
     height: 1px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--surface-sunken);
   }
 
   .version-row {
@@ -309,11 +309,11 @@
     padding: 16px 0;
   }
   .status-msg.success {
-    color: #57c785;
+    color: var(--ok);
     font-weight: 600;
   }
   .status-msg.error {
-    color: #f0a73a;
+    color: var(--warn);
     word-break: break-word;
   }
 
@@ -321,7 +321,7 @@
     display: inline-block;
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.15);
+    border: 2px solid var(--surface-sunken-stroke);
     border-top-color: var(--color-accent);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
@@ -335,7 +335,7 @@
   .progress-bar {
     width: 100%;
     height: 4px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--surface-sunken);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -359,7 +359,7 @@
     font-size: 11px;
     color: var(--color-ink-dim);
     line-height: 1.5;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface-sunken);
     padding: 8px 10px;
     border-radius: 8px;
     max-height: 120px;
@@ -382,7 +382,7 @@
     width: 100%;
     padding: 7px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--divider);
     background: transparent;
     color: var(--color-ink-dim);
     font-size: 11px;

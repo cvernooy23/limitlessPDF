@@ -99,7 +99,7 @@
     padding: 8px;
     border-radius: 12px;
     border: 1px solid var(--color-glass-stroke);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface-sunken);
     cursor: pointer;
   }
   .card.selected {
@@ -116,7 +116,7 @@
     width: 100%;
     resize: vertical;
     min-height: 36px;
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--surface-sunken);
     border: 1px solid var(--color-glass-stroke);
     border-radius: 8px;
     padding: 6px 8px;

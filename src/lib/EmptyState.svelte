@@ -8,7 +8,7 @@
   >
     <div
       class="grid h-20 w-20 place-items-center rounded-2xl text-2xl font-bold"
-      style="background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: #0b0d14;"
+      style="background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: var(--ink-invert);"
     >
       lP
     </div>
@@ -29,7 +29,7 @@
     border-radius: 12px;
     font-size: 0.9rem;
     font-weight: 600;
-    color: #0b0d14;
+    color: var(--ink-invert);
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
     border: 1px solid rgba(255, 255, 255, 0.25);
     box-shadow: 0 8px 24px rgba(110, 168, 255, 0.35);

@@ -164,7 +164,7 @@
     user-select: none;
   }
   .thumb:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-sunken);
   }
   .thumb.lifting {
     opacity: 0.5;
@@ -226,17 +226,17 @@
   }
   .act:hover {
     background: var(--color-accent);
-    color: #0b0d14;
+    color: var(--ink-invert);
   }
   .act-del:hover {
-    background: #e5484d;
+    background: var(--danger);
     color: #fff;
   }
   .page-skeleton {
     width: 100%;
     aspect-ratio: 3 / 4;
     border-radius: 6px;
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    background: linear-gradient(160deg, var(--surface-sunken-stroke), var(--surface-sunken));
+    box-shadow: inset 0 0 0 1px var(--divider);
   }
 </style>
