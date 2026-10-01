@@ -21,9 +21,13 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     linux_gl::ensure_webkit_compat();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+
+    // The in-app updater is desktop-only; on mobile, updates come from the store.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .setup(|app| {
             // Capture the resource dir so the PDFium loader can find the
             // bundled library on Linux/macOS, where it is not next to the exe.
