@@ -1,31 +1,31 @@
 {
-  "version": "0.0.20",
-  "notes": "Alpha build from latest",
-  "pub_date": "2026-10-01T23:04:22.527Z",
+  "version": "0.0.21-24.nightly",
+  "notes": "Nightly alpha build",
+  "pub_date": "2026-10-02T11:51:56.059Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDI0K2NLOUZKL01CMzFTdTZqTVZxUVZuelNsSmRzUG43VlBJV2sybTJIMmxscmR2UHNQeGVsTWZ1SW5Lb2N5Ykw0eU0xa3JJbyt5UERCWmR2ZkZlSHdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk1NzcwCWZpbGU6bGltaXRsZXNzUERGLmFwcC50YXIuZ3oKV3BjNmNWQXpGOFRPb2hKQ2ZPaitsR1VUd2FrQjNQbU52L00wZzVRWEQ2c1M0MEtEcmJjMWNFaUxXdG1DVmErRHoydXdiWHNFR0RYTHhaK28rek9hQ3c9PQo=",
-      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/v0.0.20/limitlessPDF.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdHgwc0MzNUwwbTYybkdQdm11RFJ4eDEyaENLNlhJWWhpdFJLbVlsRFpJOVB2a0lUa0tYQURGQnhQMUNROVdKN3lUOVRjNXVWdHZicEtQKy9IVXM5aWc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTQxODgwCWZpbGU6bGltaXRsZXNzUERGLmFwcC50YXIuZ3oKMGlDYXBUSWJjN2Zlb0xDTnBibG4xWHNSTUg0aHpPaEh2QUJneGFlMmVTNTYzaUJ2UFY2bW1acUZIYzVOdzArMWZPWi9JWW1lcU9LV2lrSHlKNjZLRFE9PQo=",
+      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/nightly/limitlessPDF.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDI0K2NLOUZKL01CMzFTdTZqTVZxUVZuelNsSmRzUG43VlBJV2sybTJIMmxscmR2UHNQeGVsTWZ1SW5Lb2N5Ykw0eU0xa3JJbyt5UERCWmR2ZkZlSHdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk1NzcwCWZpbGU6bGltaXRsZXNzUERGLmFwcC50YXIuZ3oKV3BjNmNWQXpGOFRPb2hKQ2ZPaitsR1VUd2FrQjNQbU52L00wZzVRWEQ2c1M0MEtEcmJjMWNFaUxXdG1DVmErRHoydXdiWHNFR0RYTHhaK28rek9hQ3c9PQo=",
-      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/v0.0.20/limitlessPDF.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdHgwc0MzNUwwbTYybkdQdm11RFJ4eDEyaENLNlhJWWhpdFJLbVlsRFpJOVB2a0lUa0tYQURGQnhQMUNROVdKN3lUOVRjNXVWdHZicEtQKy9IVXM5aWc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTQxODgwCWZpbGU6bGltaXRsZXNzUERGLmFwcC50YXIuZ3oKMGlDYXBUSWJjN2Zlb0xDTnBibG4xWHNSTUg0aHpPaEh2QUJneGFlMmVTNTYzaUJ2UFY2bW1acUZIYzVOdzArMWZPWi9JWW1lcU9LV2lrSHlKNjZLRFE9PQo=",
+      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/nightly/limitlessPDF.app.tar.gz"
     },
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdHdXYWR3TndIWmI1OXVOcFJJcEgzTk5ZK2Q1Sk41YTREL29rTFVhMVhuUVExZ2t1VEhUUExRR2ZadXdmeWUwZG82V1NiZ002RHpNVUJMNTQxU0NaQkE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk1Njk5CWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMF9hbWQ2NC5BcHBJbWFnZS50YXIuZ3oKNmdYZXlQb0hJc2xZYTFXOGZGWTh3TVZOaGt2WXNLZjluMm1tdEtWaUJWU1prcmxOUXFremN2cEJWYldVU1NkdFFYZTRSQUpYcjRVVitSOVgwdU02Qmc9PQo=",
-      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/v0.0.20/limitlessPDF_0.0.20_amd64.AppImage.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDg4dXI5cW5KZjgvWS9MaVZDeHBWMkhqRkl4aUpJTmdaOUJjN1FBMklIdXR0V2syT3ZHK2ZWZUhJbFVzWmZrdmVrOWYxZ1FPcTRhaGg4R2V3QUYyaGdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTQxNzQzCWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMS0yNC5uaWdodGx5X2FtZDY0LkFwcEltYWdlLnRhci5nego3OERjcFZra0JiNjVQNVN2ZzNkRFk0UDV5SHZibFloU2QwTGJDcExkVHJDS0xNSmY3b2dqcFFaRWRlYzlEZ0plYXorbU9SRjl3Q2wralFRSlBGM0lCZz09Cg==",
+      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/nightly/limitlessPDF_0.0.21-24.nightly_amd64.AppImage.tar.gz"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDZEZjh5U3lDOWVRRW9yYXhnRXliR2gxa2VXWTFPVTFhQXRPeER5aXhEbDFiVmxtSzhMZUdrQXFGNThhdStVRDd2eVNydWpuY3I0YjM2Z1lscDZ4T1E4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk1NzA0CWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMF94NjQtc2V0dXAubnNpcy56aXAKYno0eWhTb1R6dXIwSjh3c3M2Nmt0SDRsZHhJMkNrQVY5UXpGbFRzT2JYQ3cyMVN2dVpVY2pLcS9IRGhQTFNUQUdCSTBVYVFheTJYbzZ1ZmJKKytUQ3c9PQo=",
-      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/v0.0.20/limitlessPDF_0.0.20_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDhEclVGSE5hcHlxTnZOOFVmV05JV3E1SWpObTdFQ1htTlBRQ0JHTmxkM3VZVSs4SDcrYjJyMDYxdm9MczlJMlYxdDl3cW1uNXFjaStZbDNqcDAyb0FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTQxNzgwCWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMS0yNC5uaWdodGx5X3g2NC1zZXR1cC5uc2lzLnppcApmZ0FoL3BFVlppa1dITklwYzE5U00zTUkvRFNEVUxOOFJMMkpmV2tuQ043eFVDQ2VWNE5EUXorQUd1cXpNdEVlM3Vpa0F6M2w5VUp4VzRqMis3Ni9DUT09Cg==",
+      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/nightly/limitlessPDF_0.0.21-24.nightly_x64-setup.nsis.zip"
     },
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDZEZjh5U3lDOWVRRW9yYXhnRXliR2gxa2VXWTFPVTFhQXRPeER5aXhEbDFiVmxtSzhMZUdrQXFGNThhdStVRDd2eVNydWpuY3I0YjM2Z1lscDZ4T1E4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk1NzA0CWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMF94NjQtc2V0dXAubnNpcy56aXAKYno0eWhTb1R6dXIwSjh3c3M2Nmt0SDRsZHhJMkNrQVY5UXpGbFRzT2JYQ3cyMVN2dVpVY2pLcS9IRGhQTFNUQUdCSTBVYVFheTJYbzZ1ZmJKKytUQ3c9PQo=",
-      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/v0.0.20/limitlessPDF_0.0.20_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDhEclVGSE5hcHlxTnZOOFVmV05JV3E1SWpObTdFQ1htTlBRQ0JHTmxkM3VZVSs4SDcrYjJyMDYxdm9MczlJMlYxdDl3cW1uNXFjaStZbDNqcDAyb0FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTQxNzgwCWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMS0yNC5uaWdodGx5X3g2NC1zZXR1cC5uc2lzLnppcApmZ0FoL3BFVlppa1dITklwYzE5U00zTUkvRFNEVUxOOFJMMkpmV2tuQ043eFVDQ2VWNE5EUXorQUd1cXpNdEVlM3Vpa0F6M2w5VUp4VzRqMis3Ni9DUT09Cg==",
+      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/nightly/limitlessPDF_0.0.21-24.nightly_x64-setup.nsis.zip"
     },
     "windows-x86_64-msi": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdDlpdkRSZGFDV1pNU0lBK1NOYUYybVJmdzhodzEzQ2Z5Mnp1L3p5WFhnRUtLYmEzUmJYS2F4K1ZZa2RTUkVMdTJKdTJuQVJldEpDMThneDArNHFkd3c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk1NzA0CWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMF94NjRfZW4tVVMubXNpLnppcAprT2RlRWxYaC82QmFMY0FEQlF3aDV5QTVZWFVrMFVWN1Y1KythYjRLcDhINll3eHlzMkxBMzJQcUlLVWtNVnJ0SGNqMENUVUttYU12T01rZms3MkFBZz09Cg==",
-      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/v0.0.20/limitlessPDF_0.0.20_x64_en-US.msi.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSS2xuQitrR2ttdHloc29tZ0dFTGNWakxNTGs4Ni92YUw0L2ZZalhzeUxWUkswM0Myb291M0hMUU1qV25UWE95d2ttR0tyL205R0dsR1hYdWFEMXg5OExPN0tpWEVYVGdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTQxNzgwCWZpbGU6bGltaXRsZXNzUERGXzAuMC4yMS0yNC5uaWdodGx5X3g2NF9lbi1VUy5tc2kuemlwCjFXZDR1a2RIbHJRbnZ6Sm1MMG9vaHNjaVJtM21ITVBxeUhWaERvckRMTEZrbDVYZTNIeDk1U0Y0SHZ6dUZtbHJid2I1TVJ4WEtQNlI4UG5iNUxvUENBPT0K",
+      "url": "https://github.com/cvernooy23/limitlessPDF/releases/download/nightly/limitlessPDF_0.0.21-24.nightly_x64_en-US.msi.zip"
     }
   }
 }
