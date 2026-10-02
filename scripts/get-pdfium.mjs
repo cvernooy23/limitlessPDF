@@ -150,8 +150,7 @@ async function installDesktop() {
 
 async function main() {
   const isAndroid =
-    process.env.TAURI_ENV_PLATFORM === "android" ||
-    process.env.PDFIUM_TARGET === "android";
+    process.env.TAURI_ENV_PLATFORM === "android" || process.env.PDFIUM_TARGET === "android";
   if (isAndroid) {
     await installAndroid();
   } else {
