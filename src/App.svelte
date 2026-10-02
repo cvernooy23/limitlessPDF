@@ -60,6 +60,32 @@
   let mobile = $state(false);
   let bridgeError = $state<string | null>(null);
 
+  // Page-rail collapse. Persisted across sessions; defaults open on desktop
+  // and collapsed on mobile (applied in onMount once the platform is known,
+  // unless the user has already made a choice).
+  const RAIL_KEY = "lp-rail-open";
+  function loadRailPref(): boolean | null {
+    try {
+      const v = localStorage.getItem(RAIL_KEY);
+      if (v === "open") return true;
+      if (v === "closed") return false;
+    } catch {
+      /* localStorage may be unavailable */
+    }
+    return null;
+  }
+  let railOpen = $state(loadRailPref() ?? true);
+  let railPrefSet = loadRailPref() !== null;
+  function setRailOpen(v: boolean) {
+    railOpen = v;
+    railPrefSet = true;
+    try {
+      localStorage.setItem(RAIL_KEY, v ? "open" : "closed");
+    } catch {
+      /* best-effort persistence */
+    }
+  }
+
   // Document state
   let doc = $state<PdfDocument | null>(null);
   let fileName = $state<string | null>(null);
@@ -398,6 +424,7 @@
       version = info.version;
       engine = status;
       mobile = info.os === "android" || info.os === "ios";
+      if (!railPrefSet) railOpen = !mobile;
     } catch (e) {
       bridgeError = String(e);
     }
@@ -1195,16 +1222,28 @@
   </div>
 
   <main class="app-main flex min-h-0 flex-1 gap-2.5">
-    <div class="no-print contents">
-      <ThumbRail
-        {getDoc}
-        {pageList}
-        onSelect={scrollToKey}
-        onDelete={deletePage}
-        onMove={movePage}
-        onRotate={rotatePage}
-      />
-    </div>
+    {#if railOpen}
+      <div class="no-print contents">
+        <ThumbRail
+          {getDoc}
+          {pageList}
+          onSelect={scrollToKey}
+          onDelete={deletePage}
+          onMove={movePage}
+          onRotate={rotatePage}
+          onToggle={() => setRailOpen(false)}
+        />
+      </div>
+    {:else}
+      <button
+        class="rail-reopen glass glass-hover no-print"
+        title="Show pages"
+        aria-label="Show pages"
+        onclick={() => setRailOpen(true)}
+      >
+        <span aria-hidden="true">›</span>
+      </button>
+    {/if}
     <section
       bind:this={mainEl}
       class="viewer-shell glass relative min-h-0 flex-1 overflow-hidden rounded-2xl"
@@ -1907,5 +1946,21 @@
   }
   .update-link:hover {
     text-decoration: underline;
+  }
+  .rail-reopen {
+    align-self: flex-start;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    padding: 0.5rem 0;
+    border-radius: 0.75rem;
+    color: var(--color-ink-dim);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .rail-reopen:hover {
+    color: var(--color-ink);
   }
 </style>

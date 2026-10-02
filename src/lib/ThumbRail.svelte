@@ -8,6 +8,7 @@
     onDelete,
     onMove,
     onRotate,
+    onToggle,
   }: {
     getDoc?: (docId: string) => PdfDocument | undefined;
     pageList?: PageItem[];
@@ -15,6 +16,7 @@
     onDelete?: (key: string) => void;
     onMove?: (from: number, to: number) => void;
     onRotate?: (key: string, dir: 1 | -1) => void;
+    onToggle?: () => void;
   } = $props();
 
   const ready = $derived(pageList.length > 0 && !!getDoc);
@@ -71,8 +73,18 @@
 </script>
 
 <aside class="glass flex w-44 shrink-0 flex-col gap-3 rounded-2xl p-3">
-  <div class="px-1 text-xs font-medium uppercase tracking-wider text-[var(--color-ink-dim)]">
-    Pages{#if ready}<span class="ml-1 normal-case opacity-70">({pageList.length})</span>{/if}
+  <div class="rail-head px-1">
+    <span class="text-xs font-medium uppercase tracking-wider text-[var(--color-ink-dim)]">
+      Pages{#if ready}<span class="ml-1 normal-case opacity-70">({pageList.length})</span>{/if}
+    </span>
+    <button
+      class="rail-collapse glass-hover"
+      title="Hide pages"
+      aria-label="Hide pages"
+      onclick={() => onToggle?.()}
+    >
+      <span aria-hidden="true">‹</span>
+    </button>
   </div>
 
   <div class="flex flex-col gap-3 overflow-y-auto pr-1">
@@ -238,5 +250,28 @@
     border-radius: 6px;
     background: linear-gradient(160deg, var(--surface-sunken-stroke), var(--surface-sunken));
     box-shadow: inset 0 0 0 1px var(--divider);
+  }
+  .rail-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .rail-collapse {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-ink-dim);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .rail-collapse:hover {
+    color: var(--color-ink);
   }
 </style>

@@ -6,7 +6,7 @@
    should reference these vars, never raw colors, so both themes stay in sync.
 ----------------------------------------------------------------------------- */
 @theme {
-  --color-glass-tint: rgba(255, 255, 255, 0.06);
+  --color-glass-tint: rgba(255, 255, 255, 0.12);
   --color-glass-stroke: rgba(255, 255, 255, 0.12);
   --color-ink: #e9eaf0;
   --color-ink-dim: #9aa0b4;
@@ -63,7 +63,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --color-glass-tint: rgba(255, 255, 255, 0.62);
+  --color-glass-tint: rgba(255, 255, 255, 0.74);
   --color-glass-stroke: rgba(15, 23, 42, 0.1);
   --color-ink: #1b1e28;
   --color-ink-dim: #5a6175;
