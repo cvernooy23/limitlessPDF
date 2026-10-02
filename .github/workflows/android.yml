@@ -61,7 +61,23 @@ jobs:
         run: npx tauri android init --skip-targets-install
 
       - name: Build debug APK (arm64)
+        env:
+          # Tells get-pdfium (run via beforeBuildCommand) to fetch the
+          # Android libpdfium.so into jniLibs instead of the desktop lib.
+          PDFIUM_TARGET: android
+          PDFIUM_ANDROID_ABIS: arm64-v8a
         run: npx tauri android build --apk --debug --target aarch64
+
+      - name: Verify libpdfium.so is packaged in the APK
+        run: |
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -1)
+          echo "Inspecting $APK"
+          if unzip -l "$APK" | grep -q 'lib/arm64-v8a/libpdfium.so'; then
+            echo "OK: libpdfium.so is bundled"
+            unzip -l "$APK" | grep 'libpdfium.so'
+          else
+            echo "ERROR: libpdfium.so missing from APK"; unzip -l "$APK" | grep -i 'lib/' | head; exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * Downloads the correct prebuilt PDFium dynamic library for the current
- * platform/arch and drops it next to the Rust crate (`src-tauri/`) and into
- * `src-tauri/resources/`, where release builds pick it up via tauri.conf.json.
+ * Downloads the correct prebuilt PDFium dynamic library for the build target.
  *
- * Usage:  npm run get-pdfium
+ * Desktop (default): drops the lib next to the Rust crate (`src-tauri/`) and
+ * into `src-tauri/resources/`, where release builds pick it up via
+ * tauri.conf.json. On macOS it fetches BOTH arches and `lipo`s them into one
+ * universal `libpdfium.dylib`.
  *
- * On macOS this fetches BOTH arm64 and x86_64 and `lipo`s them into a single
- * universal `libpdfium.dylib`, so the universal app bundle works on Apple
- * Silicon and Intel alike regardless of which runner built it.
+ * Android: when invoked by Tauri's build hook with TAURI_ENV_PLATFORM=android,
+ * it instead fetches the Android `libpdfium.so` per ABI and places each into
+ * `src-tauri/gen/android/app/src/main/jniLibs/<abi>/`, where it is packaged
+ * into the APK and found by the system loader at runtime. ABIs come from
+ * PDFIUM_ANDROID_ABIS (comma-separated); default: arm64-v8a.
  *
- * No dependencies — uses Node's built-in fetch (Node 18+), the `tar` CLI that
- * ships with Windows 10+, macOS, and Linux, and `lipo` (macOS only).
+ * No dependencies — uses Node's built-in fetch (Node 18+), the `tar` CLI, and
+ * `lipo` (macOS only).
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, existsSync } from "node:fs";
@@ -22,31 +25,6 @@ import { fileURLToPath } from "node:url";
 const REPO = "bblanchon/pdfium-binaries";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcTauri = join(root, "src-tauri");
-// Two destinations:
-//   src-tauri/            → found by `tauri dev` (cwd lookup)
-//   src-tauri/resources/  → bundled into release builds via tauri.conf.json
-const destDirs = [srcTauri, join(srcTauri, "resources")];
-
-const platform = process.platform; // 'win32' | 'darwin' | 'linux'
-const arch = process.arch === "arm64" ? "arm64" : "x64";
-
-// Each platform lists one or more release assets; when more than one is given
-// their inner libraries are merged into a universal binary (macOS/lipo).
-const matrix = {
-  win32: { assets: [`pdfium-win-${arch}.tgz`], inner: "bin/pdfium.dll", out: "pdfium.dll" },
-  linux: { assets: [`pdfium-linux-${arch}.tgz`], inner: "lib/libpdfium.so", out: "libpdfium.so" },
-  darwin: {
-    assets: ["pdfium-mac-arm64.tgz", "pdfium-mac-x64.tgz"],
-    inner: "lib/libpdfium.dylib",
-    out: "libpdfium.dylib",
-  },
-};
-
-const target = matrix[platform];
-if (!target) {
-  console.error(`Unsupported platform: ${platform}`);
-  process.exit(1);
-}
 
 async function fetchWithRetry(url, attempts = 5) {
   let lastErr;
@@ -72,7 +50,8 @@ async function fetchWithRetry(url, attempts = 5) {
   throw new Error(`Download failed after ${attempts} attempts from ${url}: ${lastErr.message}`);
 }
 
-async function download(asset, work) {
+/** Download `asset`, extract it, and return the path to `inner` inside it. */
+async function fetchLib(asset, inner, work) {
   const url = `https://github.com/${REPO}/releases/latest/download/${asset}`;
   console.log(`→ Downloading ${asset} ...`);
   const res = await fetchWithRetry(url);
@@ -83,23 +62,74 @@ async function download(asset, work) {
   mkdirSync(extractDir, { recursive: true });
   execFileSync("tar", ["-xzf", tgz, "-C", extractDir], { stdio: "inherit" });
 
-  const libSrc = join(extractDir, target.inner);
+  const libSrc = join(extractDir, inner);
   if (!existsSync(libSrc)) {
-    throw new Error(`Expected library not found in ${asset}: ${target.inner}`);
+    throw new Error(`Expected library not found in ${asset}: ${inner}`);
   }
   return libSrc;
 }
 
-async function main() {
-  console.log(`→ Platform: ${platform} ${arch}`);
-  const work = mkdtempSync(join(tmpdir(), "pdfium-"));
+// ── Android: libpdfium.so per ABI into the APK's jniLibs ─────────────────────
+async function installAndroid() {
+  const ABI_ASSET = {
+    "arm64-v8a": "pdfium-android-arm64.tgz",
+    "armeabi-v7a": "pdfium-android-arm.tgz",
+    x86_64: "pdfium-android-x64.tgz",
+    x86: "pdfium-android-x86.tgz",
+  };
+  const abis = (process.env.PDFIUM_ANDROID_ABIS || "arm64-v8a")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  const libs = [];
-  for (const asset of target.assets) {
-    libs.push(await download(asset, work));
+  const jniRoot = join(srcTauri, "gen", "android", "app", "src", "main", "jniLibs");
+  if (!existsSync(join(srcTauri, "gen", "android"))) {
+    throw new Error(
+      "Android project not found (src-tauri/gen/android). Run `tauri android init` first.",
+    );
   }
 
-  // Produce the final library (merging to universal when >1 slice).
+  console.log(`→ Android PDFium for ABIs: ${abis.join(", ")}`);
+  const work = mkdtempSync(join(tmpdir(), "pdfium-android-"));
+  for (const abi of abis) {
+    const asset = ABI_ASSET[abi];
+    if (!asset) throw new Error(`Unknown Android ABI: ${abi}`);
+    const lib = await fetchLib(asset, "lib/libpdfium.so", work);
+    const destDir = join(jniRoot, abi);
+    mkdirSync(destDir, { recursive: true });
+    const dest = join(destDir, "libpdfium.so");
+    copyFileSync(lib, dest);
+    console.log(`✓ ${abi}: libpdfium.so → ${dest}`);
+  }
+}
+
+// ── Desktop: lib next to the crate + into resources/ ─────────────────────────
+async function installDesktop() {
+  const platform = process.platform; // 'win32' | 'darwin' | 'linux'
+  const arch = process.arch === "arm64" ? "arm64" : "x64";
+
+  const matrix = {
+    win32: { assets: [`pdfium-win-${arch}.tgz`], inner: "bin/pdfium.dll", out: "pdfium.dll" },
+    linux: { assets: [`pdfium-linux-${arch}.tgz`], inner: "lib/libpdfium.so", out: "libpdfium.so" },
+    darwin: {
+      assets: ["pdfium-mac-arm64.tgz", "pdfium-mac-x64.tgz"],
+      inner: "lib/libpdfium.dylib",
+      out: "libpdfium.dylib",
+    },
+  };
+  const target = matrix[platform];
+  if (!target) {
+    console.error(`Unsupported platform: ${platform}`);
+    process.exit(1);
+  }
+
+  console.log(`→ Platform: ${platform} ${arch}`);
+  const work = mkdtempSync(join(tmpdir(), "pdfium-"));
+  const libs = [];
+  for (const asset of target.assets) {
+    libs.push(await fetchLib(asset, target.inner, work));
+  }
+
   let finalLib;
   if (libs.length > 1) {
     console.log("→ Merging into a universal binary with lipo ...");
@@ -109,15 +139,24 @@ async function main() {
     finalLib = libs[0];
   }
 
-  for (const dir of destDirs) {
+  // src-tauri/ → found by `tauri dev`; src-tauri/resources/ → bundled in builds.
+  for (const dir of [srcTauri, join(srcTauri, "resources")]) {
     mkdirSync(dir, { recursive: true });
     const libDest = join(dir, target.out);
     copyFileSync(finalLib, libDest);
     console.log(`✓ Installed ${target.out} → ${libDest}`);
   }
+}
 
-  console.log('  Dev: run `npm run app:dev` — the badge should read "PDFium ready".');
-  console.log("  Build: `npm run app:build` bundles it into the installer automatically.");
+async function main() {
+  const isAndroid =
+    process.env.TAURI_ENV_PLATFORM === "android" ||
+    process.env.PDFIUM_TARGET === "android";
+  if (isAndroid) {
+    await installAndroid();
+  } else {
+    await installDesktop();
+  }
 }
 
 main().catch((err) => {
