@@ -57,6 +57,7 @@
 
   let version = $state("0.1.0");
   let engine = $state<EngineStatus | null>(null);
+  let mobile = $state(false);
   let bridgeError = $state<string | null>(null);
 
   // Document state
@@ -396,6 +397,7 @@
       const [info, status] = await Promise.all([getAppInfo(), getEngineStatus()]);
       version = info.version;
       engine = status;
+      mobile = info.os === "android" || info.os === "ios";
     } catch (e) {
       bridgeError = String(e);
     }
@@ -959,7 +961,9 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="app-root flex h-full flex-col p-2.5 gap-2.5">
-  <div class="no-print"><TitleBar /></div>
+  {#if !mobile}
+    <div class="no-print"><TitleBar /></div>
+  {/if}
 
   <div class="no-print flex flex-wrap items-center gap-2 px-1">
     <div class="min-w-0 flex-1">
@@ -1527,6 +1531,15 @@
 </div>
 
 <style>
+  /* Respect mobile status/navigation bars (and desktop is unaffected,
+     since env(safe-area-inset-*) resolves to 0 there). Added on top of
+     the Tailwind p-2.5 padding. */
+  .app-root {
+    padding-top: calc(0.625rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom));
+    padding-left: calc(0.625rem + env(safe-area-inset-left));
+    padding-right: calc(0.625rem + env(safe-area-inset-right));
+  }
   .zoombar {
     position: absolute;
     bottom: 16px;
