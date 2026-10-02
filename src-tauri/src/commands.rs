@@ -10,6 +10,8 @@ use tauri::Manager;
 pub struct AppInfo {
     name: String,
     version: String,
+    /// Target OS ("windows", "macos", "linux", "android", "ios").
+    os: String,
 }
 
 /// Basic app metadata.
@@ -18,6 +20,7 @@ pub fn app_info() -> AppInfo {
     AppInfo {
         name: "limitlessPDF".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        os: std::env::consts::OS.to_string(),
     }
 }
 

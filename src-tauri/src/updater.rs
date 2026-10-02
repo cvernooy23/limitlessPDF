@@ -100,5 +100,8 @@ pub async fn check_for_update(_channel: String) -> Result<Option<UpdateInfo>, St
 #[cfg(not(desktop))]
 #[tauri::command]
 pub async fn download_and_install_update(_channel: String) -> Result<(), String> {
-    Err("In-app updates aren't available on this platform; install updates from the app store.".into())
+    Err(
+        "In-app updates aren't available on this platform; install updates from the app store."
+            .into(),
+    )
 }

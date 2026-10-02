@@ -21,7 +21,9 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     linux_gl::ensure_webkit_compat();
 
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init());
 
     // The in-app updater is desktop-only; on mobile, updates come from the store.
     #[cfg(desktop)]

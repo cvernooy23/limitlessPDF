@@ -4,11 +4,15 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile, mkdir } from "@tauri-apps/plugin-fs";
+import { appCacheDir, join } from "@tauri-apps/api/path";
 import type { SavePayload, ContentEditPayload, FormValuePayload } from "./pdf";
 
 export interface AppInfo {
   name: string;
   version: string;
+  /** Target OS: "windows" | "macos" | "linux" | "android" | "ios". */
+  os: string;
 }
 
 export interface EngineStatus {
@@ -25,8 +29,55 @@ export function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+let _appInfo: AppInfo | null = null;
 export async function getAppInfo(): Promise<AppInfo> {
-  return invoke<AppInfo>("app_info");
+  if (!_appInfo) _appInfo = await invoke<AppInfo>("app_info");
+  return _appInfo;
+}
+
+/** True on Android/iOS, where files are content:// URIs, not paths. */
+export async function isMobile(): Promise<boolean> {
+  try {
+    const os = (await getAppInfo()).os;
+    return os === "android" || os === "ios";
+  } catch {
+    return false;
+  }
+}
+
+// On mobile the file picker returns a content:// URI that std::fs (and
+// thus the Rust core) cannot read. We stage picked files into the app's
+// private cache as real paths, run the whole existing path-based pipeline
+// on them, and copy results back out to a user-chosen URI on save/export.
+async function stageDir(): Promise<string> {
+  const dir = await join(await appCacheDir(), "lp-staging");
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch {
+    /* already exists */
+  }
+  return dir;
+}
+
+const uniq = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+/** Copy a picked (possibly content://) file into app-private storage; returns a real path. */
+async function stageIn(uri: string, ext: string): Promise<string> {
+  const bytes = await readFile(uri);
+  const dest = await join(await stageDir(), `in-${uniq()}.${ext}`);
+  await writeFile(dest, bytes);
+  return dest;
+}
+
+/** A real app-private path to produce an output file into (mobile save/export). */
+export async function stageOutPath(name: string): Promise<string> {
+  return join(await stageDir(), `out-${uniq()}-${name}`);
+}
+
+/** Copy a produced real-path file out to the user's chosen destination (content:// on mobile). */
+export async function copyOut(producedPath: string, userDest: string): Promise<void> {
+  const bytes = await readFile(producedPath);
+  await writeFile(userDest, bytes);
 }
 
 export async function getEngineStatus(): Promise<EngineStatus> {
@@ -43,7 +94,9 @@ export async function pickPdf(): Promise<string | null> {
     directory: false,
     filters: [{ name: "PDF", extensions: ["pdf"] }],
   });
-  return typeof selected === "string" ? selected : null;
+  const picked = typeof selected === "string" ? selected : null;
+  if (!picked) return null;
+  return (await isMobile()) ? stageIn(picked, "pdf") : picked;
 }
 
 /** Read a file from disk and return its raw bytes (as an ArrayBuffer). */
@@ -82,6 +135,10 @@ export async function pickExportPath(defaultName: string, ext: string): Promise<
 
 /** Write arbitrary bytes (a built export file) to `dest`. */
 export async function exportFile(dest: string, bytes: Uint8Array): Promise<void> {
+  if (await isMobile()) {
+    await writeFile(dest, bytes);
+    return;
+  }
   await invoke("export_file", { path: dest, bytes: Array.from(bytes) });
 }
 
@@ -242,7 +299,9 @@ export async function pickImage(): Promise<string | null> {
       },
     ],
   });
-  return typeof selected === "string" ? selected : null;
+  const picked = typeof selected === "string" ? selected : null;
+  if (!picked) return null;
+  return (await isMobile()) ? stageIn(picked, "img") : picked;
 }
 
 /** Create a blank single-page PDF (US Letter by default). Returns the temp path. */

@@ -39,6 +39,9 @@
     savePdf,
     pickExportPath,
     exportFile,
+    isMobile,
+    stageOutPath,
+    copyOut,
     baseName,
     inTauri,
     splitPdf,
@@ -830,13 +833,19 @@
       saveMsg = "Enter a password to encrypt, or turn off the lock.";
       return;
     }
+    // On mobile the open file is a staged cache copy, so there is no
+    // in-place overwrite target — always ask where to save. We also write
+    // to a real staged path and copy the result out to the chosen URI.
+    const mobile = await isMobile();
     let dest: string | null;
-    if (mode === "save") {
+    let userDest: string | null = null;
+    if (mode === "save" && !mobile) {
       dest = filePath; // overwrite the open file
     } else {
       const stem = (fileName ?? "document").replace(/\.pdf$/i, "");
-      dest = await pickSavePath(`${stem} (annotated).pdf`);
-      if (!dest) return;
+      userDest = await pickSavePath(`${stem} (annotated).pdf`);
+      if (!userDest) return;
+      dest = mobile ? await stageOutPath("save.pdf") : userDest;
     }
     saving = true;
     saveMsg = null;
@@ -880,9 +889,13 @@
         pw,
         openedPassword ?? undefined,
       );
+      if (mobile && userDest) {
+        await copyOut(dest, userDest);
+      }
       dirty = false;
       const lock = pw ? " 🔒" : "";
-      saveMsg = (mode === "save" ? "Saved" : `Saved ${baseName(dest)}`) + lock;
+      const shownName = baseName(userDest ?? dest);
+      saveMsg = (mode === "save" && !mobile ? "Saved" : `Saved ${shownName}`) + lock;
     } catch (e) {
       saveMsg = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
