@@ -285,6 +285,27 @@ export async function splitPdf(
   });
 }
 
+/**
+ * Mobile split: write the output files into the app's private cache (a real
+ * directory the Rust core can write to) and return their paths. The caller
+ * copies each one out to a user-chosen content:// URI via `pickSavePath` +
+ * `copyOut`, since Android has no writable directory path to target.
+ */
+export async function splitPdfToCache(
+  source: string,
+  stem: string,
+  ranges: SplitRange[],
+  sourcePassword?: string,
+): Promise<string[]> {
+  const dir = await join(await appCacheDir(), "lp-split");
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch {
+    /* already exists */
+  }
+  return splitPdf(source, dir, stem, ranges, sourcePassword);
+}
+
 // -- Insert pages/images -------------------------------------------------
 
 /** Open a native file picker for images. Returns the chosen path, or null. */

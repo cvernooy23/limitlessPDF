@@ -45,6 +45,7 @@
     baseName,
     inTauri,
     splitPdf,
+    splitPdfToCache,
     pickFolder,
     pickImage,
     createBlankPdf,
@@ -124,6 +125,8 @@
   let inkWidth = $state(2.5);
   let annotations = $state<Annotation[]>([]);
   let selectedId = $state<string | null>(null);
+  // A typed/created signature awaiting tap-to-place on a page.
+  let pendingSignature = $state<{ image: string; aspect: number } | null>(null);
   let commentsOpen = $state(false);
   let ocrOpen = $state(false);
   let sigOpen = $state(false);
@@ -344,7 +347,7 @@
       saveMsg = "Enter at least one page range (e.g. 1-3, 5)";
       return;
     }
-    if (!splitOutDir) {
+    if (!mobile && !splitOutDir) {
       saveMsg = "Choose an output folder first";
       return;
     }
@@ -357,14 +360,31 @@
       const docId = pageList[0]?.docId;
       const source = docId ? (srcPaths.get(docId) ?? "") : "";
       if (!source) throw new Error("No source PDF available");
-      const written = await splitPdf(
-        source,
-        splitOutDir,
-        stem,
-        ranges,
-        openedPassword ?? undefined,
-      );
-      saveMsg = `Split into ${written.length} file${written.length === 1 ? "" : "s"}`;
+      if (mobile) {
+        // No writable folder path on Android — produce the files in cache,
+        // then save each out to a user-chosen location.
+        const produced = await splitPdfToCache(source, stem, ranges, openedPassword ?? undefined);
+        let saved = 0;
+        for (const produced_path of produced) {
+          const dest = await pickSavePath(baseName(produced_path));
+          if (!dest) break; // user cancelled the remaining saves
+          await copyOut(produced_path, dest);
+          saved += 1;
+        }
+        saveMsg =
+          saved === 0
+            ? "Split cancelled"
+            : `Saved ${saved} of ${produced.length} split file${produced.length === 1 ? "" : "s"}`;
+      } else {
+        const written = await splitPdf(
+          source,
+          splitOutDir!,
+          stem,
+          ranges,
+          openedPassword ?? undefined,
+        );
+        saveMsg = `Split into ${written.length} file${written.length === 1 ? "" : "s"}`;
+      }
     } catch (e) {
       saveMsg = `Split failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
@@ -569,28 +589,6 @@
     }
   }
 
-  async function handleStampCreated(tempPath: string) {
-    try {
-      const bytes = await readPdf(tempPath);
-      const loaded = await loadPdf(bytes);
-      const id = newDocId();
-      docs.set(id, loaded.doc);
-      srcPaths.set(id, tempPath);
-      const item: PageItem = {
-        key: newPageKey(),
-        docId: id,
-        srcPage: 1,
-        rotation: 0,
-      };
-      pushUndo();
-      pageList = [...pageList, item];
-      dirty = true;
-      saveMsg = "Inserted typed signature";
-    } catch (e) {
-      saveMsg = `Stamp failed: ${e instanceof Error ? e.message : String(e)}`;
-    }
-  }
-
   async function insertImagePage() {
     if (!inTauri() || !doc) return;
     const imgPath = await pickImage();
@@ -692,7 +690,8 @@
           a.type === "strikethrough" ||
           a.type === "rect" ||
           a.type === "circle" ||
-          a.type === "redact"
+          a.type === "redact" ||
+          a.type === "signature"
         ) {
           const [x0, y0] = remap(a.rect.x, a.rect.y);
           const [x1, y1] = remap(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
@@ -813,6 +812,20 @@
     selectedId = a.id;
     dirty = true;
     if (a.type === "note") commentsOpen = true;
+    if (a.type === "signature") pendingSignature = null;
+  }
+
+  function updateAnnotation(a: Annotation) {
+    pushUndo();
+    annotations = annotations.map((x) => (x.id === a.id ? a : x));
+    dirty = true;
+  }
+
+  function beginPlaceSignature(image: string, aspect: number) {
+    pendingSignature = { image, aspect };
+    signOpen = false;
+    tool = "none";
+    selectedId = null;
   }
 
   function selectAnnotation(id: string | null) {
@@ -964,7 +977,8 @@
       e.preventDefault();
       scale = 1.2;
     } else if (e.key === "Escape") {
-      if (searchOpen) closeSearch();
+      if (pendingSignature) pendingSignature = null;
+      else if (searchOpen) closeSearch();
       else if (selectedId) selectedId = null;
       else if (tool !== "none") tool = "none";
     } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !typing) {
@@ -1221,6 +1235,15 @@
     </div>
   </div>
 
+  {#if pendingSignature}
+    <div class="sig-place-hint glass no-print">
+      <span>Tap a page to place your signature</span>
+      <button class="sig-place-cancel glass-hover" onclick={() => (pendingSignature = null)}>
+        Cancel
+      </button>
+    </div>
+  {/if}
+
   <main class="app-main flex min-h-0 flex-1 gap-2.5">
     {#if railOpen}
       <div class="no-print contents">
@@ -1263,6 +1286,9 @@
           {selectedId}
           onAddAnnotation={addAnnotation}
           onSelectAnnotation={selectAnnotation}
+          onUpdateAnnotation={updateAnnotation}
+          onDeleteAnnotation={deleteAnnotation}
+          {pendingSignature}
           {fontSize}
           onAddTextBox={addTextBox}
           onEditTextBox={editTextBox}
@@ -1460,7 +1486,7 @@
       sourcePassword={openedPassword ?? undefined}
       totalPages={pageList.length}
       onClose={() => (signOpen = false)}
-      onStampCreated={handleStampCreated}
+      onSignatureReady={beginPlaceSignature}
     />
   {/if}
 
@@ -1490,28 +1516,34 @@
           bind:value={splitRangeText}
           autocomplete="off"
         />
-        <div style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
-          <button
-            class="pw-modal-btn"
-            style="flex: none; padding: 8px 14px;"
-            type="button"
-            onclick={async () => {
-              const dir = await pickFolder();
-              if (dir) splitOutDir = dir;
-            }}
-          >
-            {splitOutDir ? "Change folder" : "Choose folder"}
-          </button>
-          {#if splitOutDir}
-            <span
-              class="text-xs text-[var(--color-ink-dim)] truncate"
-              title={splitOutDir}
-              style="min-width: 0;"
+        {#if !mobile}
+          <div style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
+            <button
+              class="pw-modal-btn"
+              style="flex: none; padding: 8px 14px;"
+              type="button"
+              onclick={async () => {
+                const dir = await pickFolder();
+                if (dir) splitOutDir = dir;
+              }}
             >
-              {splitOutDir.split(/[\\/]/).pop()}
-            </span>
-          {/if}
-        </div>
+              {splitOutDir ? "Change folder" : "Choose folder"}
+            </button>
+            {#if splitOutDir}
+              <span
+                class="text-xs text-[var(--color-ink-dim)] truncate"
+                title={splitOutDir}
+                style="min-width: 0;"
+              >
+                {splitOutDir.split(/[\\/]/).pop()}
+              </span>
+            {/if}
+          </div>
+        {:else}
+          <div class="text-xs text-[var(--color-ink-dim)]" style="margin-top: 2px;">
+            You'll choose where to save each file next.
+          </div>
+        {/if}
         {#if doc}
           <div class="text-xs text-[var(--color-ink-dim)]" style="margin-top: 2px;">
             Document has {doc.numPages} page{doc.numPages === 1 ? "" : "s"}
@@ -1524,7 +1556,7 @@
           <button
             type="button"
             class="pw-modal-btn primary"
-            disabled={!splitRangeText.trim() || !splitOutDir}
+            disabled={!splitRangeText.trim() || (!mobile && !splitOutDir)}
             onclick={doSplit}
           >
             Split
@@ -1946,6 +1978,29 @@
   }
   .update-link:hover {
     text-decoration: underline;
+  }
+  .sig-place-hint {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    color: var(--color-ink);
+    box-shadow: var(--shadow-panel);
+  }
+  .sig-place-cancel {
+    border: 1px solid var(--color-glass-stroke);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    color: var(--color-ink);
+    cursor: pointer;
   }
   .rail-reopen {
     align-self: flex-start;

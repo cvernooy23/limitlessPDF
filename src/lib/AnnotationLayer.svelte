@@ -3,6 +3,7 @@
     newId,
     inkToPath,
     type Annotation,
+    type SignatureAnnotation,
     type Point,
     type Rect,
     type Tool,
@@ -16,8 +17,11 @@
     inkWidth = 2.5,
     annotations,
     selectedId = null,
+    pendingSignature = null,
     onAdd,
     onSelect,
+    onUpdate,
+    onDelete,
   }: {
     pageKey: string;
     scale: number;
@@ -26,9 +30,20 @@
     inkWidth?: number;
     annotations: Annotation[];
     selectedId?: string | null;
+    pendingSignature?: { image: string; aspect: number } | null;
     onAdd: (a: Annotation) => void;
     onSelect: (id: string | null) => void;
+    onUpdate?: (a: Annotation) => void;
+    onDelete?: (id: string) => void;
   } = $props();
+
+  // The signature currently selected on this page (only in select mode), if any.
+  const selSig = $derived(
+    tool === "none" && selectedId
+      ? (annotations.find((a) => a.id === selectedId && a.type === "signature") as
+          SignatureAnnotation | undefined)
+      : undefined,
+  );
 
   let svgEl: SVGSVGElement;
   let drawing = $state(false);
@@ -45,6 +60,15 @@
   } | null>(null);
   let draftArrow = $state<{ start: Point; end: Point } | null>(null);
   let draftRedact = $state<{ x: number; y: number; w: number; h: number } | null>(null);
+  // Signature move/resize gesture state.
+  let sigAction = $state<{
+    mode: "move" | "resize";
+    id: string;
+    startRect: Rect;
+    startLocal: Point;
+  } | null>(null);
+  let sigDraft = $state<Rect | null>(null);
+  const HANDLE = 14;
 
   function toLocal(e: PointerEvent): Point {
     const r = svgEl.getBoundingClientRect();
@@ -73,9 +97,65 @@
   }
 
   function onDown(e: PointerEvent) {
-    // Select-mode clicks are handled geometrically on the HTML page container
-    // (see PdfViewer.selectAt); this SVG only handles drawing.
-    if (tool === "none") return;
+    // A pending signature drops onto the page wherever the user taps.
+    if (pendingSignature) {
+      e.preventDefault();
+      (e.target as Element).setPointerCapture?.(e.pointerId);
+      const p = toLocal(e);
+      const vw = svgEl.getBoundingClientRect().width / scale;
+      const w = Math.min(vw * 0.4, 240);
+      const h = w / (pendingSignature.aspect || 3);
+      const a: Annotation = {
+        id: newId(),
+        pageKey,
+        color: "",
+        type: "signature",
+        rect: { x: p.x - w / 2, y: p.y - h / 2, w, h },
+        image: pendingSignature.image,
+        aspect: pendingSignature.aspect || w / h,
+      };
+      onAdd(a);
+      onSelect(a.id);
+      return;
+    }
+    // Select mode: move/resize/delete the selected signature, else deselect.
+    if (tool === "none") {
+      if (!selSig) return;
+      e.preventDefault();
+      const r = svgEl.getBoundingClientRect();
+      const px = e.clientX - r.left;
+      const py = e.clientY - r.top;
+      const sx0 = selSig.rect.x * scale;
+      const sy0 = selSig.rect.y * scale;
+      const sx1 = (selSig.rect.x + selSig.rect.w) * scale;
+      const sy1 = (selSig.rect.y + selSig.rect.h) * scale;
+      if (Math.hypot(px - sx1, py - sy0) <= HANDLE) {
+        onDelete?.(selSig.id);
+        return;
+      }
+      if (Math.hypot(px - sx1, py - sy1) <= HANDLE) {
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        sigAction = {
+          mode: "resize",
+          id: selSig.id,
+          startRect: { ...selSig.rect },
+          startLocal: toLocal(e),
+        };
+        return;
+      }
+      if (px >= sx0 && px <= sx1 && py >= sy0 && py <= sy1) {
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        sigAction = {
+          mode: "move",
+          id: selSig.id,
+          startRect: { ...selSig.rect },
+          startLocal: toLocal(e),
+        };
+        return;
+      }
+      onSelect(null);
+      return;
+    }
     e.preventDefault();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const p = toLocal(e);
@@ -100,6 +180,23 @@
   }
 
   function onMove(e: PointerEvent) {
+    if (sigAction) {
+      const cur = toLocal(e);
+      const dx = cur.x - sigAction.startLocal.x;
+      const dy = cur.y - sigAction.startLocal.y;
+      if (sigAction.mode === "move") {
+        sigDraft = {
+          ...sigAction.startRect,
+          x: sigAction.startRect.x + dx,
+          y: sigAction.startRect.y + dy,
+        };
+      } else {
+        const aspect = selSig?.aspect || sigAction.startRect.w / sigAction.startRect.h || 3;
+        const w = Math.max(24, sigAction.startRect.w + dx);
+        sigDraft = { ...sigAction.startRect, w, h: w / aspect };
+      }
+      return;
+    }
     if (!drawing) return;
     const p = toLocal(e);
     if (tool === "highlight" && start) {
@@ -135,6 +232,17 @@
   }
 
   function onUp() {
+    if (sigAction) {
+      if (sigDraft) {
+        const target = annotations.find((a) => a.id === sigAction!.id);
+        if (target && target.type === "signature") {
+          onUpdate?.({ ...target, rect: { ...sigDraft } });
+        }
+      }
+      sigAction = null;
+      sigDraft = null;
+      return;
+    }
     if (!drawing) return;
     drawing = false;
     if (tool === "highlight" && draftRect && draftRect.w > 3 && draftRect.h > 3) {
@@ -191,7 +299,9 @@
 
   // Drawing tools that this SVG handles. "text" is handled by TextBoxLayer.
   const isActive = $derived(
-    tool === "highlight" ||
+    !!pendingSignature ||
+      !!selSig ||
+      tool === "highlight" ||
       tool === "underline" ||
       tool === "strikethrough" ||
       tool === "draw" ||
@@ -212,7 +322,9 @@
 <svg
   bind:this={svgEl}
   class="anno-layer"
-  style={`pointer-events: ${isActive ? "all" : "none"}; cursor: ${isActive ? "crosshair" : "default"};`}
+  style={`pointer-events: ${isActive ? "all" : "none"}; touch-action: ${
+    isActive ? "none" : "auto"
+  }; cursor: ${isActive ? (pendingSignature ? "copy" : "crosshair") : "default"};`}
   onpointerdown={onDown}
   onpointermove={onMove}
   onpointerup={onUp}
@@ -335,6 +447,54 @@
         class="shape"
         class:selected={a.id === selectedId}
       />
+    {:else if a.type === "signature"}
+      {@const rr = a.id === sigAction?.id && sigDraft ? sigDraft : a.rect}
+      <image
+        href={a.image}
+        x={rr.x * scale}
+        y={rr.y * scale}
+        width={rr.w * scale}
+        height={rr.h * scale}
+        preserveAspectRatio="none"
+        style="pointer-events: none;"
+      />
+      {#if a.id === selectedId}
+        <rect
+          x={rr.x * scale}
+          y={rr.y * scale}
+          width={rr.w * scale}
+          height={rr.h * scale}
+          fill="none"
+          stroke="var(--color-accent)"
+          stroke-width="1.5"
+          stroke-dasharray="4 3"
+          style="pointer-events: none;"
+        />
+        <rect
+          x={(rr.x + rr.w) * scale - 6}
+          y={(rr.y + rr.h) * scale - 6}
+          width="12"
+          height="12"
+          rx="2"
+          fill="var(--color-accent)"
+          stroke="#fff"
+          stroke-width="1.5"
+          style="pointer-events: none;"
+        />
+        <circle
+          cx={(rr.x + rr.w) * scale}
+          cy={rr.y * scale}
+          r="8"
+          fill="var(--danger)"
+          style="pointer-events: none;"
+        />
+        <path
+          d={`M${(rr.x + rr.w) * scale - 3} ${rr.y * scale - 3} L${(rr.x + rr.w) * scale + 3} ${rr.y * scale + 3} M${(rr.x + rr.w) * scale + 3} ${rr.y * scale - 3} L${(rr.x + rr.w) * scale - 3} ${rr.y * scale + 3}`}
+          stroke="#fff"
+          stroke-width="1.5"
+          style="pointer-events: none;"
+        />
+      {/if}
     {/if}
   {/each}
 

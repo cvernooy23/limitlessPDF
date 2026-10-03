@@ -26,6 +26,9 @@
     selectedId = null,
     onAddAnnotation,
     onSelectAnnotation,
+    onUpdateAnnotation,
+    onDeleteAnnotation,
+    pendingSignature = null,
     fontSize = 16,
     onAddTextBox,
     onEditTextBox,
@@ -47,6 +50,9 @@
     selectedId?: string | null;
     onAddAnnotation?: (a: Annotation) => void;
     onSelectAnnotation?: (id: string | null) => void;
+    onUpdateAnnotation?: (a: Annotation) => void;
+    onDeleteAnnotation?: (id: string) => void;
+    pendingSignature?: { image: string; aspect: number } | null;
     fontSize?: number;
     onAddTextBox?: (b: TextBox) => void;
     onEditTextBox?: (id: string, text: string) => void;
@@ -333,8 +339,11 @@
           {inkWidth}
           annotations={annotationsByPage?.get(pg.key) ?? []}
           {selectedId}
+          {pendingSignature}
           onAdd={(a) => onAddAnnotation?.(a)}
           onSelect={(id) => onSelectAnnotation?.(id)}
+          onUpdate={(a) => onUpdateAnnotation?.(a)}
+          onDelete={(id) => onDeleteAnnotation?.(id)}
         />
         <TextBoxLayer
           pageKey={pg.key}

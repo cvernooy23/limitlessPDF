@@ -80,6 +80,15 @@ export interface RedactAnnotation extends Base {
   type: "redact";
   rect: Rect;
 }
+export interface SignatureAnnotation extends Base {
+  type: "signature";
+  /** Placement box in scale-1 viewport space (top-left origin). */
+  rect: Rect;
+  /** PNG image as a data URL (data:image/png;base64,...). */
+  image: string;
+  /** Natural width/height ratio, preserved while resizing. */
+  aspect: number;
+}
 export type Annotation =
   | HighlightAnnotation
   | UnderlineAnnotation
@@ -89,7 +98,8 @@ export type Annotation =
   | RectShapeAnnotation
   | CircleAnnotation
   | ArrowAnnotation
-  | RedactAnnotation;
+  | RedactAnnotation
+  | SignatureAnnotation;
 
 export const ANNOTATION_COLORS = ["#ffd23f", "#ff7a90", "#6ee7b7", "#6ea8ff", "#c4a3ff"];
 
@@ -193,6 +203,12 @@ export function hitTest(annos: Annotation[], x: number, y: number, scale: number
         a.end.y * scale,
       );
       if (d <= tol) return a.id;
+    } else if (a.type === "signature") {
+      const x0 = a.rect.x * scale;
+      const y0 = a.rect.y * scale;
+      const x1 = (a.rect.x + a.rect.w) * scale;
+      const y1 = (a.rect.y + a.rect.h) * scale;
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return a.id;
     }
   }
   return null;

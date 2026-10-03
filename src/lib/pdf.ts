@@ -52,6 +52,13 @@ export type SavePayload =
       out_index: number;
       color: string;
       rect: { x0: number; y0: number; x1: number; y1: number };
+    }
+  | {
+      type: "signature";
+      out_index: number;
+      rect: { x0: number; y0: number; x1: number; y1: number };
+      /** PNG bytes of the signature image. */
+      image: number[];
     };
 
 export interface LoadedPdf {
@@ -448,6 +455,16 @@ export async function textBoxesToContentEdits(
  * by its output-page index. Handles the y-flip, page offset, and rotation, and
  * resolves each annotation's source document by its page key.
  */
+/** Decode a `data:image/png;base64,...` URL into a plain byte array. */
+function dataUrlToBytes(dataUrl: string): number[] {
+  const comma = dataUrl.indexOf(",");
+  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const bin = atob(b64);
+  const bytes = new Array<number>(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
 export async function annotationsToPayload(
   annotations: import("./annotations").Annotation[],
   pageList: PageItem[],
@@ -512,6 +529,15 @@ export async function annotationsToPayload(
         start: { x: sx, y: sy },
         end: { x: ex, y: ey },
         width: a.width,
+      });
+    } else if (a.type === "signature") {
+      const [x0, y0] = v.convertToPdfPoint(a.rect.x, a.rect.y);
+      const [x1, y1] = v.convertToPdfPoint(a.rect.x + a.rect.w, a.rect.y + a.rect.h);
+      out.push({
+        type: "signature",
+        out_index: idx,
+        rect: { x0, y0, x1, y1 },
+        image: dataUrlToBytes(a.image),
       });
     } else {
       const [x, y] = v.convertToPdfPoint(a.x, a.y);

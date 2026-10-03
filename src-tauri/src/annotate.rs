@@ -92,6 +92,13 @@ pub enum SaveAnnotation {
         color: String,
         rect: RectPdf,
     },
+    /// A placed signature (or any image) stamped onto the page at `rect`.
+    Signature {
+        out_index: u32,
+        rect: RectPdf,
+        /// PNG bytes of the signature image.
+        image: Vec<u8>,
+    },
 }
 
 impl SaveAnnotation {
@@ -106,7 +113,8 @@ impl SaveAnnotation {
             | SaveAnnotation::Rect { out_index, .. }
             | SaveAnnotation::Circle { out_index, .. }
             | SaveAnnotation::Arrow { out_index, .. }
-            | SaveAnnotation::Redact { out_index, .. } => *out_index,
+            | SaveAnnotation::Redact { out_index, .. }
+            | SaveAnnotation::Signature { out_index, .. } => *out_index,
         }) as usize
     }
 }
@@ -847,6 +855,66 @@ fn build_annotation(doc: &mut Document, a: &SaveAnnotation) -> Result<ObjectId, 
             d.set("Open", Object::Boolean(false));
             Ok(doc.add_object(Object::Dictionary(d)))
         }
+
+        SaveAnnotation::Signature { rect, image, .. } => {
+            let (x0, y0, x1, y1) = normalize(rect.x0, rect.y0, rect.x1, rect.y1);
+            let (bw, bh) = (x1 - x0, y1 - y0);
+
+            let decoded = image::load_from_memory(image)
+                .map_err(|e| format!("Could not decode signature image: {e}"))?;
+            let rgba = decoded.to_rgba8();
+            let (iw, ih) = (rgba.width(), rgba.height());
+            if iw == 0 || ih == 0 {
+                return Err("Signature image has zero dimensions".to_string());
+            }
+            let mut rgb = Vec::with_capacity((iw * ih * 3) as usize);
+            let mut alpha = Vec::with_capacity((iw * ih) as usize);
+            for px in rgba.pixels() {
+                rgb.push(px[0]);
+                rgb.push(px[1]);
+                rgb.push(px[2]);
+                alpha.push(px[3]);
+            }
+
+            // Soft mask carrying the alpha channel, so transparent areas of the
+            // signature let the page content show through.
+            let mut smask_dict = Dictionary::new();
+            smask_dict.set("Type", Object::Name(b"XObject".to_vec()));
+            smask_dict.set("Subtype", Object::Name(b"Image".to_vec()));
+            smask_dict.set("Width", Object::Integer(iw as i64));
+            smask_dict.set("Height", Object::Integer(ih as i64));
+            smask_dict.set("ColorSpace", Object::Name(b"DeviceGray".to_vec()));
+            smask_dict.set("BitsPerComponent", Object::Integer(8));
+            let smask_id = doc.add_object(Object::Stream(Stream::new(smask_dict, alpha)));
+
+            let mut img_dict = Dictionary::new();
+            img_dict.set("Type", Object::Name(b"XObject".to_vec()));
+            img_dict.set("Subtype", Object::Name(b"Image".to_vec()));
+            img_dict.set("Width", Object::Integer(iw as i64));
+            img_dict.set("Height", Object::Integer(ih as i64));
+            img_dict.set("ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
+            img_dict.set("BitsPerComponent", Object::Integer(8));
+            img_dict.set("SMask", Object::Reference(smask_id));
+            let img_id = doc.add_object(Object::Stream(Stream::new(img_dict, rgb)));
+
+            // Appearance form: draw the image scaled into the annotation rect.
+            let content = format!("q {bw:.2} 0 0 {bh:.2} {x0:.2} {y0:.2} cm /Im Do Q");
+            let mut xobjects = Dictionary::new();
+            xobjects.set("Im", Object::Reference(img_id));
+            let mut res = Dictionary::new();
+            res.set("XObject", Object::Dictionary(xobjects));
+
+            let mut form = Dictionary::new();
+            form.set("Type", Object::Name(b"XObject".to_vec()));
+            form.set("Subtype", Object::Name(b"Form".to_vec()));
+            form.set("BBox", arr4(x0, y0, x1, y1));
+            form.set("Resources", Object::Dictionary(res));
+            let form_id = doc.add_object(Object::Stream(Stream::new(form, content.into_bytes())));
+
+            let mut d = annot_base("Stamp", x0, y0, x1, y1, 0.0, 0.0, 0.0);
+            d.set("AP", ap_dict(form_id));
+            Ok(doc.add_object(Object::Dictionary(d)))
+        }
     }
 }
 
@@ -1212,6 +1280,28 @@ mod tests {
         let d = doc.get_dictionary(id).unwrap();
         assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Square");
         assert!(d.get(b"BS").is_ok());
+        assert!(d.get(b"AP").is_ok());
+    }
+
+    #[test]
+    fn build_signature_annotation() {
+        let mut doc = make_doc();
+        let img = image::RgbaImage::from_pixel(4, 3, image::Rgba([10, 20, 30, 128]));
+        let mut png = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let anno = SaveAnnotation::Signature {
+            out_index: 0,
+            rect: RectPdf {
+                x0: 72.0,
+                y0: 72.0,
+                x1: 272.0,
+                y1: 122.0,
+            },
+            image: png.into_inner(),
+        };
+        let id = build_annotation(&mut doc, &anno).unwrap();
+        let d = doc.get_dictionary(id).unwrap();
+        assert_eq!(d.get(b"Subtype").unwrap().as_name().unwrap(), b"Stamp");
         assert!(d.get(b"AP").is_ok());
     }
 

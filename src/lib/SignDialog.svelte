@@ -1,23 +1,17 @@
 <script lang="ts">
-  import {
-    listCertificates,
-    signPdf,
-    createStampPdf,
-    pickSavePath,
-    type CertInfo,
-    type SignRect,
-  } from "./api";
+  import { listCertificates, signPdf, pickSavePath, type CertInfo, type SignRect } from "./api";
 
   interface Props {
     filePath: string;
     sourcePassword?: string;
     totalPages: number;
     onClose: () => void;
-    /** Called after a stamp PDF is created so the parent can insert it. */
-    onStampCreated: (tempPath: string) => void;
+    /** Called with the signature PNG (data URL) + aspect ratio so the parent
+     *  can enter placement mode and drop it onto a page. */
+    onSignatureReady: (image: string, aspect: number) => void;
   }
 
-  let { filePath, sourcePassword, totalPages, onClose, onStampCreated }: Props = $props();
+  let { filePath, sourcePassword, totalPages, onClose, onSignatureReady }: Props = $props();
 
   // ── Tab state ──────────────────────────────────────────────────────────
 
@@ -143,15 +137,10 @@
       ctx.textBaseline = "middle";
       ctx.fillText(typedName, 20, textHeight / 2);
 
-      // Get PNG bytes
-      const blob = await new Promise<Blob>((resolve) =>
-        canvas.toBlob((b) => resolve(b!), "image/png"),
-      );
-      const arrayBuf = await blob.arrayBuffer();
-      const pngBytes = Array.from(new Uint8Array(arrayBuf));
-
-      const tempPath = await createStampPdf(pngBytes);
-      onStampCreated(tempPath);
+      // Hand the transparent PNG to the parent for tap-to-place on a page.
+      const dataUrl = canvas.toDataURL("image/png");
+      const aspect = canvas.width / canvas.height;
+      onSignatureReady(dataUrl, aspect);
       onClose();
     } catch (e) {
       stampError = String(e);
@@ -309,12 +298,12 @@
             onclick={handleCreateStamp}
             disabled={stampCreating || !typedName.trim()}
           >
-            {stampCreating ? "Creating..." : "Insert Signature"}
+            {stampCreating ? "Preparing..." : "Place Signature"}
           </button>
         </div>
         <p class="hint">
-          Creates a cursive image of your name and inserts it as a new page. You can then rearrange
-          it in the document.
+          Creates a cursive image of your name. Tap a page to drop it, then drag to reposition or
+          use the corner handle to resize.
         </p>
       </div>
     {/if}
