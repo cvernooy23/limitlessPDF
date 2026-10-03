@@ -35,6 +35,12 @@ getrandom = "0.4"
 # Image format decoding for the insert-image-page feature.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp", "tiff"] }
 
+# Zip bundling for the mobile "Split into multiple files" flow: Android has no
+# writable output directory, so the split parts are bundled into one .zip the
+# user saves. Pure-Rust deflate backend (no C toolchain) keeps the Android
+# cross-build simple.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 # PDF engine. pdfium-render loads the PDFium dynamic library at runtime, so the
 # crate compiles even when the .dll/.dylib/.so isn't present yet — we surface a
 # friendly "not found" status instead of failing the build.

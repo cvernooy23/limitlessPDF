@@ -46,6 +46,7 @@
     inTauri,
     splitPdf,
     splitPdfToCache,
+    zipFiles,
     pickFolder,
     pickImage,
     createBlankPdf,
@@ -361,20 +362,29 @@
       const source = docId ? (srcPaths.get(docId) ?? "") : "";
       if (!source) throw new Error("No source PDF available");
       if (mobile) {
-        // No writable folder path on Android — produce the files in cache,
-        // then save each out to a user-chosen location.
+        // No writable output folder on Android: produce the parts in cache,
+        // then hand back a single file. One range saves as a PDF; multiple
+        // ranges are bundled into one .zip the user saves.
         const produced = await splitPdfToCache(source, stem, ranges, openedPassword ?? undefined);
-        let saved = 0;
-        for (const produced_path of produced) {
-          const dest = await pickSavePath(baseName(produced_path));
-          if (!dest) break; // user cancelled the remaining saves
-          await copyOut(produced_path, dest);
-          saved += 1;
+        if (produced.length === 1) {
+          const dest = await pickSavePath(baseName(produced[0]));
+          if (!dest) {
+            saveMsg = "Split cancelled";
+          } else {
+            await copyOut(produced[0], dest);
+            saveMsg = `Saved ${baseName(dest)}`;
+          }
+        } else {
+          const zipCache = await stageOutPath(`${stem}-split.zip`);
+          await zipFiles(produced, zipCache);
+          const dest = await pickExportPath(`${stem}-split.zip`, "zip");
+          if (!dest) {
+            saveMsg = "Split cancelled";
+          } else {
+            await copyOut(zipCache, dest);
+            saveMsg = `Saved ${produced.length} files to ${baseName(dest)}`;
+          }
         }
-        saveMsg =
-          saved === 0
-            ? "Split cancelled"
-            : `Saved ${saved} of ${produced.length} split file${produced.length === 1 ? "" : "s"}`;
       } else {
         const written = await splitPdf(
           source,
@@ -1541,7 +1551,7 @@
           </div>
         {:else}
           <div class="text-xs text-[var(--color-ink-dim)]" style="margin-top: 2px;">
-            You'll choose where to save each file next.
+            Saved as one .zip (a single PDF when there's just one range).
           </div>
         {/if}
         {#if doc}

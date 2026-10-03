@@ -53,6 +53,7 @@ pub fn run() {
             commands::run_ocr,
             commands::check_signatures,
             commands::split_pdf,
+            commands::zip_files,
             commands::create_blank_pdf,
             commands::create_image_pdf,
             commands::list_certificates,

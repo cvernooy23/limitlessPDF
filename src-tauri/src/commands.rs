@@ -179,6 +179,38 @@ pub fn split_pdf(
     )
 }
 
+// ── Zip bundling ────────────────────────────────────────────────────────
+
+/// Bundle `paths` into a single zip written to `dest` (entries named by their
+/// basename). Used by the mobile "Split into multiple files" flow, where
+/// Android can only hand back one writable destination at a time.
+#[tauri::command]
+pub fn zip_files(paths: Vec<String>, dest: String) -> Result<String, String> {
+    use std::io::Write;
+    let file =
+        std::fs::File::create(&dest).map_err(|e| format!("Couldn't create zip \"{dest}\": {e}"))?;
+    let mut writer = zip::ZipWriter::new(file);
+    let opts = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    for path in &paths {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| format!("Bad file path: {path}"))?;
+        let bytes = std::fs::read(path).map_err(|e| format!("Couldn't read \"{path}\": {e}"))?;
+        writer
+            .start_file(name, opts)
+            .map_err(|e| format!("Zip error: {e}"))?;
+        writer
+            .write_all(&bytes)
+            .map_err(|e| format!("Zip write error: {e}"))?;
+    }
+    writer
+        .finish()
+        .map_err(|e| format!("Zip finalize error: {e}"))?;
+    Ok(dest)
+}
+
 // -- Insert pages --------------------------------------------------------
 
 /// Create a blank single-page PDF with the given dimensions (in points).

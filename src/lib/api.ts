@@ -306,6 +306,11 @@ export async function splitPdfToCache(
   return splitPdf(source, dir, stem, ranges, sourcePassword);
 }
 
+/** Bundle `paths` into a single zip at `dest`. Used by the mobile split flow. */
+export async function zipFiles(paths: string[], dest: string): Promise<string> {
+  return invoke<string>("zip_files", { paths, dest });
+}
+
 // -- Insert pages/images -------------------------------------------------
 
 /** Open a native file picker for images. Returns the chosen path, or null. */
