@@ -15,6 +15,15 @@ mod linux_gl;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg(mobile)]
+static PIV_APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+/// The app handle captured at setup, for the mobile certificate-signing path.
+#[cfg(mobile)]
+pub(crate) fn piv_app() -> Option<tauri::AppHandle> {
+    PIV_APP.get().cloned()
+}
+
 pub fn run() {
     // On Linux, fall back to software rendering when EGL is unusable so we
     // degrade gracefully instead of aborting on GPU-less machines.
@@ -39,6 +48,12 @@ pub fn run() {
             // bundled library on Linux/macOS, where it is not next to the exe.
             if let Ok(resource_dir) = app.path().resource_dir() {
                 engine::set_resource_dir(resource_dir);
+            }
+            // Stash the app handle so the mobile signing path can reach the
+            // pivsign plugin from the (handle-less) digsig helpers.
+            #[cfg(mobile)]
+            {
+                let _ = PIV_APP.set(app.handle().clone());
             }
             if let Some(window) = app.get_webview_window("main") {
                 apply_window_effects(&window);

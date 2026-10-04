@@ -169,7 +169,16 @@ pub fn list_certificates() -> Result<Vec<CertInfo>, String> {
     {
         linux_ssl::enum_certificates()
     }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "android")]
+    {
+        android_signer::list_identities()
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "android"
+    )))]
     {
         Err("Certificate listing is not available on this platform".to_string())
     }
@@ -192,10 +201,82 @@ fn platform_sign_data(thumbprint: &str, data1: &[u8], data2: &[u8]) -> Result<Ve
     {
         linux_ssl::sign_data(thumbprint, data1, data2)
     }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "android")]
+    {
+        android_signer::sign_data(thumbprint, data1, data2)
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "android"
+    )))]
     {
         let _ = (thumbprint, data1, data2);
         Err("PDF signing is not available on this platform".to_string())
+    }
+}
+
+/// Android signing path: delegate certificate enumeration and PKCS#7 creation
+/// to the `pivsign` plugin (KeyChain today; PIV/CAC over NFC/USB later).
+#[cfg(target_os = "android")]
+mod android_signer {
+    use super::CertInfo;
+    use tauri::Manager;
+    use tauri_plugin_pivsign::{ListIdentitiesArgs, PivsignExt, SignDataArgs};
+
+    pub fn list_identities() -> Result<Vec<CertInfo>, String> {
+        let app = crate::piv_app().ok_or("App is still starting up")?;
+        let resp = app
+            .pivsign()
+            .list_identities(ListIdentitiesArgs {
+                source: "keychain".to_string(),
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(resp
+            .identities
+            .into_iter()
+            .map(|i| CertInfo {
+                thumbprint: i.id,
+                subject: i.subject,
+                issuer: i.issuer,
+                has_private_key: true,
+            })
+            .collect())
+    }
+
+    pub fn sign_data(thumbprint: &str, data1: &[u8], data2: &[u8]) -> Result<Vec<u8>, String> {
+        use base64::Engine;
+        let app = crate::piv_app().ok_or("App is still starting up")?;
+
+        // The KeyChain signer reads the exact ByteRange content from a file to
+        // avoid shipping multi-megabyte payloads across the plugin bridge.
+        let mut content = Vec::with_capacity(data1.len() + data2.len());
+        content.extend_from_slice(data1);
+        content.extend_from_slice(data2);
+        let dir = app
+            .path()
+            .app_cache_dir()
+            .map_err(|e| format!("No app cache dir: {e}"))?;
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = dir.join(format!("pivsign-content-{nanos}.bin"));
+        std::fs::write(&path, &content).map_err(|e| e.to_string())?;
+
+        let result = app.pivsign().sign_data(SignDataArgs {
+            source: "keychain".to_string(),
+            id: thumbprint.to_string(),
+            content_path: path.to_string_lossy().into_owned(),
+        });
+        let _ = std::fs::remove_file(&path);
+
+        let resp = result.map_err(|e| e.to_string())?;
+        base64::engine::general_purpose::STANDARD
+            .decode(resp.pkcs7_b64)
+            .map_err(|e| format!("Bad PKCS#7 from signer: {e}"))
     }
 }
 

@@ -21,7 +21,7 @@ use desktop::Pivsign;
 #[cfg(mobile)]
 use mobile::Pivsign;
 
-/// Extensions to [`tauri::App`], [`tauri::AppHandle`] and [`tauri::Window`] to access the pivsign APIs.
+/// Extensions to access the pivsign APIs from the app.
 pub trait PivsignExt<R: Runtime> {
   fn pivsign(&self) -> &Pivsign<R>;
 }
@@ -35,7 +35,10 @@ impl<R: Runtime, T: Manager<R>> crate::PivsignExt<R> for T {
 /// Initializes the plugin.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
   Builder::new("pivsign")
-    .invoke_handler(tauri::generate_handler![commands::ping])
+    .invoke_handler(tauri::generate_handler![
+      commands::list_identities,
+      commands::sign_data
+    ])
     .setup(|app, api| {
       #[cfg(mobile)]
       let pivsign = mobile::init(app, api)?;

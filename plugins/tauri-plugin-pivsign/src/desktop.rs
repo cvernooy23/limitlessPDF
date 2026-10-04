@@ -10,13 +10,16 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
   Ok(Pivsign(app.clone()))
 }
 
-/// Access to the pivsign APIs.
+/// Access to the pivsign APIs (desktop stub: signing uses the OS cert store
+/// directly in the app, so these are never called on desktop).
 pub struct Pivsign<R: Runtime>(AppHandle<R>);
 
 impl<R: Runtime> Pivsign<R> {
-  pub fn ping(&self, payload: PingRequest) -> crate::Result<PingResponse> {
-    Ok(PingResponse {
-      value: payload.value,
-    })
+  pub fn list_identities(&self, _args: ListIdentitiesArgs) -> crate::Result<ListIdentitiesResponse> {
+    Err(crate::Error::Unsupported)
+  }
+
+  pub fn sign_data(&self, _args: SignDataArgs) -> crate::Result<SignDataResponse> {
+    Err(crate::Error::Unsupported)
   }
 }

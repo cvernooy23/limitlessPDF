@@ -1,13 +1,21 @@
-use tauri::{AppHandle, command, Runtime};
+use tauri::{command, AppHandle, Runtime};
 
 use crate::models::*;
-use crate::Result;
 use crate::PivsignExt;
+use crate::Result;
 
 #[command]
-pub(crate) async fn ping<R: Runtime>(
-    app: AppHandle<R>,
-    payload: PingRequest,
-) -> Result<PingResponse> {
-    app.pivsign().ping(payload)
+pub(crate) async fn list_identities<R: Runtime>(
+  app: AppHandle<R>,
+  args: ListIdentitiesArgs,
+) -> Result<ListIdentitiesResponse> {
+  app.pivsign().list_identities(args)
+}
+
+#[command]
+pub(crate) async fn sign_data<R: Runtime>(
+  app: AppHandle<R>,
+  args: SignDataArgs,
+) -> Result<SignDataResponse> {
+  app.pivsign().sign_data(args)
 }

@@ -36,5 +36,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    // BouncyCastle: build the detached PKCS#7 / CMS SignedData for the PDF.
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     implementation(project(":tauri-android"))
 }

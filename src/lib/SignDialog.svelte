@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { listCertificates, signPdf, pickSavePath, type CertInfo, type SignRect } from "./api";
+  import {
+    listCertificates,
+    signPdf,
+    pickSavePath,
+    isMobile,
+    stageOutPath,
+    copyOut,
+    type CertInfo,
+    type SignRect,
+  } from "./api";
 
   interface Props {
     filePath: string;
@@ -73,11 +82,15 @@
     signError = "";
     signSuccess = "";
     try {
-      const dest = await pickSavePath("signed.pdf");
-      if (!dest) {
+      const userDest = await pickSavePath("signed.pdf");
+      if (!userDest) {
         signing = false;
         return;
       }
+      // On mobile the picked destination is a content:// URI the Rust core
+      // can't write to directly, so sign to a staged path and copy it out.
+      const mobile = await isMobile();
+      const dest = mobile ? await stageOutPath("signed.pdf") : userDest;
       const cert = certs.find((c) => c.thumbprint === selectedThumbprint);
       const rect = positionToRect(sigPosition);
       await signPdf(
@@ -92,6 +105,7 @@
         cert?.subject || undefined,
         sourcePassword,
       );
+      if (mobile) await copyOut(dest, userDest);
       signSuccess = `Signed PDF saved successfully`;
     } catch (e) {
       signError = String(e);
