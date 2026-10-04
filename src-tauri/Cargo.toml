@@ -52,6 +52,11 @@ pdfium-render = { version = "0.8", default-features = false, features = ["pdfium
 [target."cfg(any(target_os = \"windows\", target_os = \"macos\", target_os = \"linux\"))".dependencies]
 tauri-plugin-updater = "2"
 
+# Smart-card / certificate signing is mobile-only (KeyChain, PIV/CAC over
+# NFC/USB). Desktop uses the OS cert store directly (see digsig.rs).
+[target."cfg(any(target_os = \"android\", target_os = \"ios\"))".dependencies]
+tauri-plugin-pivsign = { path = "../plugins/tauri-plugin-pivsign" }
+
 # Native window blur: Mica/Acrylic on Windows, vibrancy on macOS.
 [target."cfg(target_os = \"windows\")".dependencies]
 window-vibrancy = "0.5"

@@ -29,6 +29,10 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
+    // Smart-card / certificate signing plugin is mobile-only.
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_pivsign::init());
+
     builder
         .setup(|app| {
             // Capture the resource dir so the PDFium loader can find the
