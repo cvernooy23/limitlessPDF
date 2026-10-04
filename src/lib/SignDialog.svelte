@@ -26,6 +26,15 @@
 
   let activeTab = $state<"certificate" | "typed">("certificate");
 
+  // Platform: on mobile we don't auto-launch the credential chooser, and we
+  // offer an NFC security-key option alongside the device KeyChain.
+  let mobile = $state(false);
+  let platformKnown = $state(false);
+  isMobile().then((m) => {
+    mobile = m;
+    platformKnown = true;
+  });
+
   // ── Certificate tab ────────────────────────────────────────────────────
 
   let certs = $state<CertInfo[]>([]);
@@ -70,6 +79,39 @@
         return { x: (pageW - w) / 2, y: margin, width: w, height: h };
       case "bottom-right":
         return { x: pageW - w - margin, y: margin, width: w, height: h };
+    }
+  }
+
+  async function signNfc() {
+    signing = true;
+    signError = "";
+    signSuccess = "";
+    try {
+      const userDest = await pickSavePath("signed.pdf");
+      if (!userDest) {
+        signing = false;
+        return;
+      }
+      const dest = await stageOutPath("signed.pdf");
+      const rect = positionToRect(sigPosition);
+      await signPdf(
+        filePath,
+        dest,
+        sigPage,
+        rect,
+        "nfc",
+        sigFieldName,
+        sigReason || undefined,
+        sigLocation || undefined,
+        undefined,
+        sourcePassword,
+      );
+      await copyOut(dest, userDest);
+      signSuccess = `Signed PDF saved successfully`;
+    } catch (e) {
+      signError = String(e);
+    } finally {
+      signing = false;
     }
   }
 
@@ -163,9 +205,10 @@
     }
   }
 
-  // Load certificates on mount
+  // Load certificates on mount — desktop only. On mobile the user explicitly
+  // picks a credential source (device KeyChain or an NFC security key).
   $effect(() => {
-    if (activeTab === "certificate") {
+    if (activeTab === "certificate" && platformKnown && !mobile) {
       loadCerts();
     }
   });
@@ -206,7 +249,32 @@
     <!-- Certificate tab -->
     {#if activeTab === "certificate"}
       <div class="tab-content">
-        {#if certsLoading}
+        {#if mobile}
+          <button class="glass glass-hover sign-btn" onclick={loadCerts} disabled={certsLoading}>
+            {certsLoading ? "Opening chooser..." : "Choose device credential"}
+          </button>
+          {#if certsError}
+            <p class="error">{certsError}</p>
+          {/if}
+          {#if certs.length > 0}
+            <div class="cert-list">
+              {#each certs as cert}
+                <label class="cert-item" class:selected={selectedThumbprint === cert.thumbprint}>
+                  <input
+                    type="radio"
+                    name="cert"
+                    value={cert.thumbprint}
+                    bind:group={selectedThumbprint}
+                  />
+                  <div class="cert-info">
+                    <span class="cert-subject">{cert.subject}</span>
+                    <span class="cert-issuer">Issued by: {cert.issuer}</span>
+                  </div>
+                </label>
+              {/each}
+            </div>
+          {/if}
+        {:else if certsLoading}
           <p class="loading">Loading certificates...</p>
         {:else if certsError}
           <p class="error">{certsError}</p>
@@ -274,8 +342,13 @@
             onclick={handleSign}
             disabled={signing || !selectedThumbprint}
           >
-            {signing ? "Signing..." : "Sign PDF"}
+            {signing ? "Signing..." : mobile ? "Sign with device credential" : "Sign PDF"}
           </button>
+          {#if mobile}
+            <button class="glass glass-hover sign-btn" onclick={signNfc} disabled={signing}>
+              {signing ? "Signing..." : "Sign with NFC security key"}
+            </button>
+          {/if}
         </div>
       </div>
     {/if}

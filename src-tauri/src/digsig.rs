@@ -266,8 +266,15 @@ mod android_signer {
         let path = dir.join(format!("pivsign-content-{nanos}.bin"));
         std::fs::write(&path, &content).map_err(|e| e.to_string())?;
 
+        // "nfc" (and later "usb") are sentinels for hardware PIV tokens; any
+        // other thumbprint is a KeyChain alias.
+        let source = match thumbprint {
+            "nfc" => "nfc",
+            "usb" => "usb",
+            _ => "keychain",
+        };
         let result = app.pivsign().sign_data(SignDataArgs {
-            source: "keychain".to_string(),
+            source: source.to_string(),
             id: thumbprint.to_string(),
             content_path: path.to_string_lossy().into_owned(),
         });

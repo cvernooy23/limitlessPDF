@@ -38,5 +38,8 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     // BouncyCastle: build the detached PKCS#7 / CMS SignedData for the PDF.
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+    // YubiKit: PIV over NFC (YubiKey 5 NFC and NFC-capable PIV tokens).
+    implementation("com.yubico.yubikit:android:2.6.0")
+    implementation("com.yubico.yubikit:piv:2.6.0")
     implementation(project(":tauri-android"))
 }
