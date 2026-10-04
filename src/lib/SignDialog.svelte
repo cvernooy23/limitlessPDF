@@ -115,6 +115,39 @@
     }
   }
 
+  async function signUsb() {
+    signing = true;
+    signError = "";
+    signSuccess = "";
+    try {
+      const userDest = await pickSavePath("signed.pdf");
+      if (!userDest) {
+        signing = false;
+        return;
+      }
+      const dest = await stageOutPath("signed.pdf");
+      const rect = positionToRect(sigPosition);
+      await signPdf(
+        filePath,
+        dest,
+        sigPage,
+        rect,
+        "usb",
+        sigFieldName,
+        sigReason || undefined,
+        sigLocation || undefined,
+        undefined,
+        sourcePassword,
+      );
+      await copyOut(dest, userDest);
+      signSuccess = `Signed PDF saved successfully`;
+    } catch (e) {
+      signError = String(e);
+    } finally {
+      signing = false;
+    }
+  }
+
   async function handleSign() {
     if (!selectedThumbprint) {
       signError = "Select a certificate first";
@@ -347,6 +380,9 @@
           {#if mobile}
             <button class="glass glass-hover sign-btn" onclick={signNfc} disabled={signing}>
               {signing ? "Signing..." : "Sign with NFC security key"}
+            </button>
+            <button class="glass glass-hover sign-btn" onclick={signUsb} disabled={signing}>
+              {signing ? "Signing..." : "Sign with USB card (CAC)"}
             </button>
           {/if}
         </div>

@@ -2,6 +2,14 @@ package com.plugin.pivsign
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
+import android.os.Build
 import android.security.KeyChain
 import android.text.InputType
 import android.util.Base64
@@ -40,6 +48,8 @@ import java.security.PrivateKey
 import java.security.Signature
 import java.security.cert.X509Certificate
 import java.util.concurrent.atomic.AtomicBoolean
+
+private const val ACTION_USB_PERMISSION = "com.plugin.pivsign.USB_PERMISSION"
 
 @InvokeArg
 class ListIdentitiesArgs {
@@ -112,6 +122,7 @@ class ExamplePlugin(private val activity: Activity) : Plugin(activity) {
     when (args.source) {
       "keychain" -> signWithKeyChain(invoke, args)
       "nfc" -> signWithNfc(invoke, args)
+      "usb" -> signWithUsb(invoke, args)
       else -> invoke.reject("Signing source not supported yet: ${args.source}")
     }
   }
@@ -144,25 +155,115 @@ class ExamplePlugin(private val activity: Activity) : Plugin(activity) {
       invoke.reject("Could not read content to sign: ${e.message}")
       return
     }
+    promptPin(
+      "Enter your PIV PIN, then hold your security key to the back of the phone.",
+      onPin = { pin -> startNfcSign(invoke, content, pin) },
+      onCancel = { invoke.reject("Cancelled") },
+    )
+  }
+
+  // Physical PIV card (e.g. a CAC) in a USB-C CCID reader.
+  private fun signWithUsb(invoke: Invoke, args: SignDataArgs) {
+    val content: ByteArray = try {
+      File(args.contentPath).readBytes()
+    } catch (e: Exception) {
+      invoke.reject("Could not read content to sign: ${e.message}")
+      return
+    }
+    val usbManager = activity.getSystemService(Context.USB_SERVICE) as UsbManager
+    val device = UsbCcidConnection.findReader(usbManager)
+    if (device == null) {
+      invoke.reject("No USB smart-card reader found. Connect a CCID reader with your card inserted.")
+      return
+    }
+    if (usbManager.hasPermission(device)) {
+      promptPinThenSignUsb(invoke, content, usbManager, device)
+    } else {
+      requestUsbPermission(usbManager, device) { granted ->
+        if (granted) promptPinThenSignUsb(invoke, content, usbManager, device)
+        else invoke.reject("USB permission was denied")
+      }
+    }
+  }
+
+  private fun promptPinThenSignUsb(
+    invoke: Invoke,
+    content: ByteArray,
+    usbManager: UsbManager,
+    device: UsbDevice,
+  ) {
+    promptPin(
+      "Enter your PIV PIN to sign with the inserted smart card.",
+      onPin = { pin ->
+        Thread {
+          var conn: UsbCcidConnection? = null
+          try {
+            conn = UsbCcidConnection.open(usbManager, device)
+            val piv = PivSession(conn)
+            piv.verifyPin(pin.toCharArray())
+            val cert = piv.getCertificate(Slot.SIGNATURE)
+            val pkcs7 = buildCmsWithPivCard(content, piv, cert)
+            resolvePkcs7(invoke, pkcs7)
+          } catch (e: Exception) {
+            invoke.reject("USB card signing failed: ${e.message}")
+          } finally {
+            try {
+              conn?.close()
+            } catch (_: Exception) {
+            }
+          }
+        }.start()
+      },
+      onCancel = { invoke.reject("Cancelled") },
+    )
+  }
+
+  private fun requestUsbPermission(
+    usbManager: UsbManager,
+    device: UsbDevice,
+    callback: (Boolean) -> Unit,
+  ) {
+    val receiver = object : BroadcastReceiver() {
+      override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action == ACTION_USB_PERMISSION) {
+          try {
+            activity.unregisterReceiver(this)
+          } catch (_: Exception) {
+          }
+          callback(intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false))
+        }
+      }
+    }
+    val filter = IntentFilter(ACTION_USB_PERMISSION)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      activity.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      @Suppress("UnspecifiedRegisterReceiverFlag")
+      activity.registerReceiver(receiver, filter)
+    }
+    val flags =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+    val intent = Intent(ACTION_USB_PERMISSION).setPackage(activity.packageName)
+    val pending = PendingIntent.getBroadcast(activity, 0, intent, flags)
+    usbManager.requestPermission(device, pending)
+  }
+
+  private fun promptPin(message: String, onPin: (String) -> Unit, onCancel: () -> Unit) {
     activity.runOnUiThread {
       val input = EditText(activity).apply {
         inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
         hint = "PIV PIN"
       }
       AlertDialog.Builder(activity)
-        .setTitle("Sign with security key")
-        .setMessage("Enter your PIV PIN, then hold your security key to the back of the phone.")
+        .setTitle("Sign with smart card")
+        .setMessage(message)
         .setView(input)
         .setCancelable(false)
         .setPositiveButton("Continue") { _, _ ->
           val pin = input.text.toString()
-          if (pin.isEmpty()) {
-            invoke.reject("PIN is required")
-          } else {
-            startNfcSign(invoke, content, pin)
-          }
+          if (pin.isEmpty()) onCancel() else onPin(pin)
         }
-        .setNegativeButton("Cancel") { _, _ -> invoke.reject("Cancelled") }
+        .setNegativeButton("Cancel") { _, _ -> onCancel() }
         .show()
     }
   }
