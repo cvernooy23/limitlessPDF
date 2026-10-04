@@ -14,7 +14,6 @@ mod linux_gl;
 
 use tauri::Manager;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[cfg(mobile)]
 static PIV_APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
@@ -24,6 +23,7 @@ pub(crate) fn piv_app() -> Option<tauri::AppHandle> {
     PIV_APP.get().cloned()
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // On Linux, fall back to software rendering when EGL is unusable so we
     // degrade gracefully instead of aborting on GPU-less machines.
