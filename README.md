@@ -36,12 +36,15 @@ kept editable or flattened into the page content.
 insert pages from another PDF, insert blank pages, or insert an image as a new page. Split a
 document into separate files by page range.
 
-**Signatures** — sign documents with a platform certificate (Windows CryptoAPI, macOS Keychain,
-Linux NSS/OpenSSL) or create a typed-name stamp signature. A verification panel checks existing
-digital signatures and reports whether the document was modified after signing.
+**Signatures** — place a typed-name signature anywhere on the page, or sign cryptographically.
+On desktop, signing uses the OS certificate store (Windows CryptoAPI, macOS Keychain, Linux
+NSS/OpenSSL). On Android, signing uses the system KeyChain (imported certs and MDM/Purebred
+derived PIV credentials), an NFC PIV token, or a PIV/CAC card in a USB-C smart-card reader. A
+verification panel checks existing digital signatures and reports whether the document was
+modified after signing.
 
 **OCR** — detect scanned/image-only pages and extract text using Tesseract, with configurable
-language and DPI.
+language and DPI. Desktop only (requires the Tesseract CLI).
 
 **Security** — encrypt saved PDFs with AES-128 password protection.
 
@@ -54,6 +57,46 @@ form fills, and page operations. Ctrl+Z / Ctrl+Shift+Z.
 **Glassmorphism UI** — frameless transparent window with native OS blur (Mica on Windows,
 vibrancy on macOS), glass-effect panels, and an adaptive toolbar that collapses with scroll
 arrows on narrow windows.
+
+## Platform support (desktop vs mobile)
+
+limitlessPDF runs from one Rust + Svelte codebase on desktop (Windows, macOS, Linux) and Android.
+The Android build is an in-progress milestone; nearly everything is at parity, with the
+platform-specific differences noted below.
+
+| Feature                                                                                                 | Desktop                                       | Android                           | Notes                                                  |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------- | ------------------------------------------------------ |
+| Open / view / render PDFs                                                                               | Yes                                           | Yes                               | PDFium engine + pdf.js display on both                 |
+| Zoom, fit-to-width, page navigation                                                                     | Yes                                           | Yes                               |                                                        |
+| Thumbnail page rail (collapsible)                                                                       | Yes                                           | Yes                               | Defaults open on desktop, collapsed on mobile          |
+| Reorder / rotate / delete pages                                                                         | Yes                                           | Yes                               |                                                        |
+| Insert PDF / blank / image page                                                                         | Yes                                           | Yes                               |                                                        |
+| Text search                                                                                             | Yes                                           | Yes                               |                                                        |
+| Open encrypted (password) PDFs                                                                          | Yes                                           | Yes                               |                                                        |
+| Open a file                                                                                             | Drag-and-drop or picker                       | Picker                            | Android uses the system file picker (content URIs)     |
+| Annotate (highlight, underline, strikethrough, draw, notes, text box, rectangle, circle, arrow, redact) | Yes                                           | Yes                               | Touch drawing supported on mobile                      |
+| Edit existing text (PDFium)                                                                             | Yes                                           | Yes                               |                                                        |
+| Fill AcroForm fields (keep editable or flatten)                                                         | Yes                                           | Yes                               |                                                        |
+| Typed signature placed on the page                                                                      | Yes                                           | Yes                               | Tap/click to place, drag to move, corner-handle resize |
+| Cryptographic digital signature                                                                         | Yes (OS certificate store)                    | Yes (KeyChain / NFC / USB)        | See "Android signing" below                            |
+| Verify embedded signatures                                                                              | Yes                                           | Yes                               |                                                        |
+| OCR (searchable text)                                                                                   | Yes                                           | No                                | Needs the Tesseract CLI; desktop only                  |
+| Encrypt on save (AES-128)                                                                               | Yes                                           | Yes                               |                                                        |
+| Export to txt / md / html / docx / xlsx                                                                 | Yes                                           | Yes                               |                                                        |
+| Save / Save As                                                                                          | Save in place or Save As                      | Always Save As                    | Android scoped storage picks the destination           |
+| Split into multiple files                                                                               | Yes (to a chosen folder)                      | Yes (one .zip)                    | A single page range saves as a plain PDF               |
+| Print                                                                                                   | Yes (print dialog)                            | Yes (system print)                | Android routes to the OS print / "Save as PDF" sheet   |
+| Undo / redo (50-step history)                                                                           | Yes                                           | Yes                               |                                                        |
+| Keyboard shortcuts                                                                                      | Yes                                           | No                                | No physical keyboard on mobile                         |
+| In-app auto-update                                                                                      | Yes                                           | No                                | Mobile updates come from the store / sideload          |
+| Theme (light / dark)                                                                                    | Follows OS + manual toggle                    | Follows OS                        | Manual toggle lives in the desktop title bar           |
+| Window chrome                                                                                           | Frameless glass (Mica / vibrancy) + title bar | Native Android (title bar hidden) | Mobile adds safe-area insets for the status / nav bars |
+
+**Android signing.** Desktop signs through the OS certificate store. Android signs with the
+system **KeyChain** (imported `.p12` certificates and MDM/Purebred-provisioned derived PIV
+credentials), an **NFC** PIV token (e.g. YubiKey 5 NFC), or a **PIV/CAC** card in a **USB-C**
+CCID smart-card reader. The Android signing paths are newly added and pending on-device
+verification with real credentials and hardware.
 
 ---
 
